@@ -9,7 +9,7 @@ export function invoiceDate(purchaseDate: string, card: Pick<CreditCard,'closing
 }
 export function installmentAmounts(total: number, count: number) {
  const cents = Math.round(total*100);
- if (!Number.isInteger(count) || count<1 || count>60 || cents<count) throw new Error('Valor ou parcelas inválidos.');
+ if (!Number.isSafeInteger(count) || count<1 || !Number.isSafeInteger(cents) || cents<count) throw new Error('Valor ou parcelas inválidos.');
  return Array.from({length:count},(_,i)=>(Math.floor(cents/count)+(i<cents%count?1:0))/100);
 }
 export type BalanceAdjustment = {id:string;bank_id:string;amount:number;date:string;notes:string};

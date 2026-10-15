@@ -26,6 +26,8 @@ import {
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/seriesDates";
 import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
 import BanksSection from "./Banks";
+import { sameMonthParts } from "../lib/installments";
+import { installmentAmounts } from "../lib/credit";
 import CreditCards from "./CreditCards";
 import { adjustmentEntry, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
 import { cashDate, cashPosition } from "../lib/finance";
@@ -311,34 +313,7 @@ const contactsWithLegacyEntries = (saved: Counterparty[], entries: Entry[]) => {
   );
 };
 type SameMonthPart = { date: string; amount: string };
-const sameMonthParts = (count: number, total: number, baseDate: string) => {
-  const safeCount = Math.max(2, Math.min(12, Math.floor(count) || 2));
-  const totalCents = Math.round(Math.max(0, total || 0) * 100);
-  const baseCents = Math.floor(totalCents / safeCount);
-  const remainder = totalCents - baseCents * safeCount;
-  const base = new Date(`${baseDate}T12:00:00`);
-  const lastDay = new Date(
-    base.getFullYear(),
-    base.getMonth() + 1,
-    0,
-  ).getDate();
-  const firstDay = Math.min(base.getDate(), lastDay);
-  return Array.from({ length: safeCount }, (_, index) => {
-    const day =
-      safeCount === 1
-        ? firstDay
-        : Math.round(
-            firstDay + ((lastDay - firstDay) * index) / (safeCount - 1),
-          );
-    const date = new Date(base.getFullYear(), base.getMonth(), day)
-      .toISOString()
-      .slice(0, 10);
-    return {
-      date,
-      amount: moneyInput((baseCents + (index < remainder ? 1 : 0)) / 100),
-    };
-  });
-};
+
 
 function nextRecurringEntries(entries: Entry[]) {
   const startOfCurrentMonth = new Date(
@@ -1427,6 +1402,10 @@ function EntryForm({
       setSaveError("Informe um valor válido, por exemplo 1.500,00.");
       return;
     }
+    if (!recurrence && !sameMonthInstallments && Math.round(v * 100) < installments) {
+      setSaveError("O valor total precisa permitir ao menos R$ 0,01 por parcela.");
+      return;
+    }
     if (!category) {
       setSaveError("Selecione uma categoria antes de salvar.");
       return;
@@ -1902,11 +1881,10 @@ function EntryForm({
                 Parcelar em meses
                 <input
                   min="1"
-                  max="120"
                   type="number"
                   value={installments}
                   onChange={(e) =>
-                    setInstallments(Math.max(1, Number(e.target.value) || 1))
+                    setInstallments(Math.max(1, Math.floor(Number(e.target.value)) || 1))
                   }
                   className="w-16 rounded-lg border bg-white p-1.5 text-center font-normal"
                 />
@@ -1969,13 +1947,12 @@ function EntryForm({
                     Quantidade de parcelas
                     <input
                       min="2"
-                      max="12"
                       type="number"
                       value={sameMonthPartCount}
                       onChange={(e) => {
                         const count = Math.max(
                           2,
-                          Math.min(12, Number(e.target.value) || 2),
+                          Math.floor(Number(e.target.value)) || 2,
                         );
                         setSameMonthPartCount(count);
                         setSameMonthPartsState(
@@ -3779,6 +3756,7 @@ function App() {
             ? id()
             : undefined,
         count = data.recurrence === "mensal" ? 36 : data.installments;
+      const monthlyAmounts = data.recurrence === "mensal" ? null : installmentAmounts(data.amount, count);
       const created = Array.from({ length: count }, (_, i) => {
         return {
           ...data,
@@ -3787,7 +3765,7 @@ function App() {
           amount:
             data.recurrence === "mensal"
               ? data.amount
-              : data.amount / data.installments,
+              : monthlyAmounts![i],
           // Limita ao último dia do mês: 31/07 + 2 meses = 30/09 (não 01/10).
           date: addMonthsClamped(data.date, i),
           status: i === 0 ? data.status : "previsto",
