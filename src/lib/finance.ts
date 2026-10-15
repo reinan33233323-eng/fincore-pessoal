@@ -4,6 +4,7 @@ export type FinancialEntry = {
   amount: number;
   date: string;
   bankId?: string | null;
+  paidDate?: string | null;
   juros?: number;
   discount?: number;
 };
@@ -37,3 +38,12 @@ export function summarizeBank(entries: FinancialEntry[], bankId: string | null) 
 export const localDateKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const localMonthKey = (date: Date) => localDateKey(date).slice(0, 7);
+
+// Cash follows settlement dates; pending amounts remain on their due dates.
+export const cashDate = (entry: FinancialEntry) => entry.status === 'realizado' && entry.paidDate ? entry.paidDate : entry.date;
+export function cashPosition(entries: FinancialEntry[], from: string, to: string) {
+ const opening = summarizeFinancialEntries(entries.filter(e => e.status==='realizado' && cashDate(e)<from)).balance;
+ const period = summarizeFinancialEntries(entries.filter(e => cashDate(e)>=from && cashDate(e)<=to));
+ return {opening, closing:Math.round((opening+period.balance)*100)/100,
+ projectedClosing:Math.round((opening+period.projectedBalance)*100)/100};
+}

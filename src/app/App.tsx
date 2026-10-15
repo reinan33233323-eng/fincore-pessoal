@@ -26,6 +26,9 @@ import {
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/seriesDates";
 import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
 import BanksSection from "./Banks";
+import CreditCards from "./CreditCards";
+import { adjustmentEntry, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
+import { cashDate, cashPosition } from "../lib/finance";
 import { entryValue, summarizeFinancialEntries, summarizeBank, localDateKey, localMonthKey } from "../lib/finance";
 import { snapshotFile, unreadableFileMessage } from "../lib/files";
 import {
@@ -96,6 +99,9 @@ type Entry = {
   paidDate?: string;
   discount?: number;
   bankId?: string | null;
+  creditCardId?: string | null;
+  invoiceMonth?: string | null;
+  balanceAdjustment?: boolean;
 };
 // Busca sem diferenciar acentos nem maiúsculas ("divida" acha "Dívida").
 const normalizeSearch = (text: string) =>
@@ -2549,7 +2555,8 @@ function Reports({
       (kind === "todos" || contact.kind === kind),
     )
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  const filtered = entries.filter(
+  const cashEntries = entries.map(entry => ({...entry, date:cashDate(entry)}));
+  const filtered = cashEntries.filter(
     (entry) =>
       entry.date >= from &&
       entry.date <= to &&
@@ -2567,6 +2574,7 @@ function Reports({
           entry.kind === entryKind && (!status || entry.status === status),
       )
       .reduce((sum, entry) => sum + entryValue(entry), 0);
+  const reportPosition = cashPosition(cashEntries.filter(e => (unit === "Todos" || e.unit === unit) && (account === "Todos" || (e.bankId || "__unassigned__") === account) && (category === "Todos" || e.category === category) && (kind === "todos" || e.kind === kind) && (counterparty === "Todos" || contactIdentity(e.kind,e.unit,e.beneficiary||"") === counterparty)),from,to);
   const income = total("receita");
   const expense = total("despesa");
   const pendingPay = total("despesa", "previsto");
@@ -2677,7 +2685,7 @@ function Reports({
   );
   const accountRows = [...banks.map(bank => ({ id: bank.id, name: bank.name })), { id: "__unassigned__", name: "Sem conta bancária informada" }]
     .filter(item => account === "Todos" || item.id === account)
-    .map(item => ({ ...item, balance: summarizeBank(filtered, item.id === "__unassigned__" ? null : item.id).balance }));
+    .map(item => ({ ...item, balance: cashPosition(cashEntries.filter(e => (e.bankId || "__unassigned__") === item.id && (unit === "Todos" || e.unit === unit) && (category === "Todos" || e.category === category) && (kind === "todos" || e.kind === kind) && (counterparty === "Todos" || contactIdentity(e.kind,e.unit,e.beneficiary||"") === counterparty)),from,to).closing }));
   return (
     <section className="space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow-sm">
@@ -2821,6 +2829,7 @@ function Reports({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h2 className="font-extrabold text-[#191918]">Fluxo financeiro no período</h2>
+            <p className="mt-2 text-xs text-slate-600">Saldo anterior: {fmt(reportPosition.opening)} · Saldo final realizado: {fmt(reportPosition.closing)} · Saldo final previsto: {fmt(reportPosition.projectedClosing)}</p>
             <p className="mt-1 text-xs text-slate-400">
               {shortPeriod ? "Visão semanal" : "Visão mensal"} · Passe o mouse nas barras para ver os valores.
             </p>
@@ -3151,6 +3160,8 @@ function App() {
     [contactsTableReady, setContactsTableReady] = useState(false),
     [banks, setBanks] = useState<Bank[]>([]),
     [banksReady, setBanksReady] = useState(false),
+    [cards, setCards] = useState<PersonalCreditCard[]>([]),
+    [adjustments, setAdjustments] = useState<BalanceAdjustment[]>([]),
     [categories, setCategories] = useState<Category[]>([]),
     [centers, setCenters] = useState<CostCenter[]>([]),
     [centerTableReady, setCenterTableReady] = useState(false),
@@ -3277,6 +3288,7 @@ function App() {
           paidDate: row.paid_date || undefined,
           discount: row.discount != null ? Number(row.discount) : undefined,
           bankId: row.bank_id === undefined ? undefined : row.bank_id,
+          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month,
         })) as Entry[];
         // The new registry has its own migration. Until it is applied, the
         // old production database and existing launches must remain readable.
@@ -3322,6 +3334,12 @@ function App() {
           }
         }
         if (!active) return;
+        const [cardRows, adjustmentRows] = await Promise.all([
+          readAuthenticatedRows<PersonalCreditCard>("credit_cards", "name.asc"),
+          readAuthenticatedRows<BalanceAdjustment>("bank_balance_adjustments", "date.asc"),
+        ]);
+        if (!active) return;
+        setCards(cardRows); setAdjustments(adjustmentRows);
         setEntries(entriesToShow);
         setSavedContacts(contactRows);
         setContactsTableReady(contactTableAvailable);
@@ -3353,20 +3371,24 @@ function App() {
       busy = true;
       setRefreshing(true);
       try {
-        const [rows, categoryRows, centerRows, bankRows, contactRows, profileRows] = await Promise.all([
+        const [rows, categoryRows, centerRows, bankRows, contactRows, profileRows, cardRows, adjustmentRows] = await Promise.all([
           readAuthenticatedRows<any>("entries", "date.desc"),
           readAuthenticatedRows<Category>("categories"),
           centerTableReady ? readAuthenticatedRows<CostCenterRow>("cost_centers") : Promise.resolve(null),
           banksReady ? readAuthenticatedRows<Bank>("banks") : Promise.resolve(null),
           contactsTableReady ? readAuthenticatedRows<Counterparty>("counterparties") : Promise.resolve(null),
           readAuthenticatedRows<any>("profiles"),
+          readAuthenticatedRows<PersonalCreditCard>("credit_cards", "name.asc"),
+          readAuthenticatedRows<BalanceAdjustment>("bank_balance_adjustments", "date.asc"),
         ]);
         if (cancelled) return;
         setEntries(rows.map((row: any) => ({
           ...row, seriesId: row.series_id || undefined, counterpartyId: row.counterparty_id ?? undefined,
           amount: Number(row.amount), juros: Number(row.juros || 0), paidDate: row.paid_date || undefined,
           discount: Number(row.discount || 0), bankId: row.bank_id ?? null,
+          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month,
         })) as Entry[]);
+        setCards(cardRows); setAdjustments(adjustmentRows);
         setCategories(categoryRows);
         if (centerRows) setCenters(centerRows.map(costCenterVisual));
         if (bankRows) setBanks(bankRows);
@@ -3546,7 +3568,7 @@ function App() {
       : centers.filter((unit) => currentUser.units.includes(unit.name));
   const key = localMonthKey(month),
     today = localDateKey(new Date()),
-    visible = entries.filter(
+    visible: Entry[] = [...entries, ...adjustments.map(adjustmentEntry)].filter(
       (x) =>
         currentUser.role === "master" || currentUser.units.includes(x.unit),
     ),
@@ -3558,7 +3580,7 @@ function App() {
     ),
     overduePay = overdue.filter((x) => x.kind === "despesa"),
     overdueReceive = overdue.filter((x) => x.kind === "receita"),
-    current = visible.filter((x) => x.date.startsWith(key)),
+    current = visible.filter((x) => cashDate(x).startsWith(key)),
     localDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
     todayStr = localDate(new Date()),
@@ -3583,12 +3605,13 @@ function App() {
       const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       return { start: localDate(first), end: localDate(last), label: labelMonth(month) };
     })(),
-    listCurrent = visible.filter((x) => x.date >= period.start && x.date <= period.end),
+    listCurrent = visible.filter((x) => cashDate(x) >= period.start && cashDate(x) <= period.end),
     payToday = visible.filter(
       (x) => x.kind === "despesa" && x.status === "previsto" && x.date === todayStr,
     ),
     payTodayTotal = payToday.reduce((s, x) => s + x.amount, 0),
     totals = summarizeFinancialEntries(current),
+    position = cashPosition(visible, `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
     move = (n: number) =>
       setMonth((v) => new Date(v.getFullYear(), v.getMonth() + n, 1)),
     openOverdue = (kind: Kind | "todos" = "todos") => {
@@ -3623,6 +3646,18 @@ function App() {
       setNotificationsOpen(false);
       setScreen("lancamentos");
     };
+  const refreshPersonal = async () => {
+    const [rows, adjustmentRows, bankRows, cardRows] = await Promise.all([
+      readAuthenticatedRows<any>("entries", "date.desc"),
+      readAuthenticatedRows<BalanceAdjustment>("bank_balance_adjustments", "date.asc"),
+      readAuthenticatedRows<Bank>("banks", "name.asc"),
+      readAuthenticatedRows<PersonalCreditCard>("credit_cards", "name.asc"),
+    ]);
+    setEntries(rows.map(row => ({...row, amount:Number(row.amount), juros:Number(row.juros||0), discount:Number(row.discount||0),
+      paidDate:row.paid_date, bankId:row.bank_id, seriesId:row.series_id, creditCardId:row.credit_card_id, invoiceMonth:row.invoice_month})));
+    setAdjustments(adjustmentRows); setBanks(bankRows); setCards(cardRows);
+    setSyncVersion(v=>v+1);
+  };
   const refreshContacts = async () => {
     if (!contactsTableReady) return;
     try {
@@ -3767,6 +3802,7 @@ function App() {
       void refreshContacts();
     },
     settle = async (x: Entry) => {
+      if (x.balanceAdjustment || x.creditCardId) { setScreen(x.balanceAdjustment ? "contas" : "cartoes"); return; }
       const becomingPaid = x.status !== "realizado";
       const updated = {
         ...x,
@@ -3912,6 +3948,7 @@ function App() {
       { id: "dashboard", text: "Dashboard", Icon: LayoutDashboard },
       { id: "lancamentos", text: "Lançamentos", Icon: ReceiptText },
       { id: "contas", text: "Contas", Icon: Wallet },
+      { id: "cartoes", text: "Cartões de crédito", Icon: CreditCard },
       { id: "categorias", text: "Plano de contas", Icon: Tag },
       { id: "contatos", text: "Fornecedores/clientes", Icon: Building2 },
       { id: "relatorios", text: "Relatórios", Icon: BarChart3 },
@@ -3986,6 +4023,8 @@ function App() {
               <h1 className="font-extrabold text-[#191918]">
                 {screen === "dashboard"
                   ? "Dashboard Financeiro"
+                  : screen === "cartoes"
+                    ? "Cartões de crédito"
                   : screen === "contas"
                     ? "Contas"
                     : screen === "categorias"
@@ -4120,12 +4159,12 @@ function App() {
                     Visão mensal
                   </h2>
                   <p className="text-xs text-gray-400">
-                    Receitas, despesas e categorias do mês selecionado.
+                    Receitas, despesas e saldos do mês selecionado.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3"><Month value={month} move={move} /><button type="button" disabled={refreshing} onClick={() => setSyncVersion(value => value + 1)} className="rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 disabled:opacity-50">{refreshing ? "Atualizando…" : "Atualizar dados"}</button></div>
               </div>
-              <p className={`mb-4 text-xs ${syncError ? "font-bold text-red-600" : "text-slate-500"}`}>{syncError ? "Não foi possível atualizar os dados. Clique em Atualizar dados para tentar novamente." : lastSync ? `Dados atualizados às ${lastSync}. Período por vencimento; atrasos consideram todos os meses.` : "Carregando atualização dos dados…"}</p>
+              <p className={`mb-4 text-xs ${syncError ? "font-bold text-red-600" : "text-slate-500"}`}>{syncError ? "Não foi possível atualizar os dados. Clique em Atualizar dados para tentar novamente." : lastSync ? `Dados atualizados às ${lastSync}. Realizados por data de pagamento; previstos por vencimento. Atrasos consideram todos os meses.` : "Carregando atualização dos dados…"}</p>
               {pending.length > 0 && (
                 <section className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   <b>⚠ Pendências de vencimento: {pending.length}</b>
@@ -4241,17 +4280,21 @@ function App() {
               </section>
               <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
                 <h2 className="font-extrabold text-[#191918]">Resumo dos lançamentos do mês</h2>
-                <p className="mt-1 text-xs text-slate-500">{current.length} lançamento(s), por data de vencimento. Os previstos entram em A pagar / A receber; os realizados em Pagas / Recebidas.</p>
+                <p className="mt-1 text-xs text-slate-500">{current.length} lançamento(s). Realizados por pagamento e previstos por vencimento. Os previstos entram em A pagar / A receber; os realizados em Pagas / Recebidas.</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {isMaster && <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Receitas totais do mês</p><b className="text-xl text-emerald-700">{fmt(totals.totalIncome)}</b></div>}
                   <div className="rounded-xl bg-red-50 p-4"><p className="text-xs font-bold text-red-800">Despesas totais do mês</p><b className="text-xl text-red-700">{fmt(totals.totalExpense)}</b></div>
-                  {isMaster && <div className="rounded-xl bg-brand-50 p-4"><p className="text-xs font-bold text-brand-800">Saldo previsto do mês</p><b className="text-xl text-brand-700">{fmt(totals.projectedBalance)}</b></div>}
+                  {isMaster && <div className="rounded-xl bg-brand-50 p-4"><p className="text-xs font-bold text-brand-800">Saldo final previsto do mês</p><b className="text-xl text-brand-700">{fmt(position.projectedClosing)}</b></div>}
                 </div>
               </section>
+              {isMaster && <section className="mt-5 grid gap-3 sm:grid-cols-3" aria-label="Posição de caixa mensal">
+                {[['Saldo anterior ao mês', position.opening], ['Saldo final realizado do mês', position.closing], ['Saldo final previsto do mês', position.projectedClosing]].map(([title,value]) => <div key={String(title)} className="rounded-2xl bg-white p-5 shadow-sm"><p className="text-xs font-bold text-slate-500">{title}</p><b className="mt-2 block text-xl">{fmt(Number(value))}</b></div>)}
+                <p className="text-xs text-slate-500 sm:col-span-3">Inclui ajustes de saldo. Resultado das movimentações do mês: {fmt(totals.balance)}. O saldo anterior é transportado entre meses.</p>
+              </section>}
               {isMaster && <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3"><div><h2 className="font-extrabold text-[#191918]">Contas bancárias</h2><p className="text-xs text-slate-500">Saldo dos lançamentos realizados em todos os meses. Previstos não alteram o saldo.</p></div><button onClick={() => setScreen("contas")} className="rounded-xl border border-brand-200 px-3 py-2 text-xs font-bold text-brand-700">Gerenciar contas</button></div>
+                <div className="flex items-center justify-between gap-3"><div><h2 className="font-extrabold text-[#191918]">Contas bancárias</h2><p className="text-xs text-slate-500">Saldo atual com ajustes e pagamentos de faturas. Previstos não alteram o saldo.</p></div><button onClick={() => setScreen("contas")} className="rounded-xl border border-brand-200 px-3 py-2 text-xs font-bold text-brand-700">Gerenciar contas</button></div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {banks.map(bank => { const data = summarizeBank(visible, bank.id); return <div key={bank.id} className="rounded-xl border p-4"><p className="font-bold">{bank.name}</p><p className={`mt-2 text-xl font-extrabold ${data.balance < 0 ? "text-red-600" : "text-brand-700"}`}>{fmt(data.balance)}</p><p className="mt-1 text-xs text-slate-500">Recebido {fmt(data.income)} · Pago {fmt(data.expense)}</p></div>; })}
+                  {banks.map(bank => { const data = summarizeBank(visible.filter(e => cashDate(e) <= today), bank.id); return <div key={bank.id} className="rounded-xl border p-4"><p className="font-bold">{bank.name}</p><p className={`mt-2 text-xl font-extrabold ${data.balance < 0 ? "text-red-600" : "text-brand-700"}`}>{fmt(data.balance)}</p><p className="mt-1 text-xs text-slate-500">Recebido {fmt(data.income)} · Pago {fmt(data.expense)}</p></div>; })}
                   {!banks.length && <p className="text-sm text-slate-500">Nenhuma conta bancária cadastrada. Cadastre as contas que usa para pagar e receber.</p>}
                 </div>
                 {visible.some(entry => !entry.bankId && entry.status === "realizado") && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Há movimentações realizadas sem conta bancária informada. Elas aparecem nos totais financeiros, mas não são atribuídas ao saldo de nenhum banco.</p>}
@@ -4368,18 +4411,19 @@ function App() {
                   categories={categories}
                   banks={banks}
                   settle={settle}
-                  edit={(x) =>
+                  edit={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
                     x.seriesId
                       ? setScopeDialog({ entry: x, action: "editar" })
                       : (setEditScope("one"), setEditing(x), setModal(x.kind))
                   }
                   open={(x) => {
+                    if (x.balanceAdjustment || x.creditCardId) { setScreen(x.balanceAdjustment ? "contas" : "cartoes"); return; }
                     // Atalho: edita só este mês, sem perguntar "Este mês / Toda a série".
                     setEditScope("one");
                     setEditing(x);
                     setModal(x.kind);
                   }}
-                  remove={(x) =>
+                  remove={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
                     x.seriesId
                       ? setScopeDialog({ entry: x, action: "excluir" })
                       : remove(x, "one")
@@ -4388,7 +4432,9 @@ function App() {
               </section>
             </>
           ) : screen === "contas" ? (
-            <BanksSection banks={banks} ready={banksReady} canManage={isMaster} entries={visible} setBanks={setBanks} />
+            <BanksSection banks={banks} ready={banksReady} canManage={isMaster} entries={visible} setBanks={setBanks} onRefresh={refreshPersonal} />
+          ) : screen === "cartoes" ? (
+            <CreditCards cards={cards} setCards={setCards} banks={banks} entries={entries} centers={centers} categories={categories} onRefresh={refreshPersonal} />
           ) : screen === "contatos" ? (
             <ContactsScreen
               contacts={contacts}
@@ -4421,7 +4467,7 @@ function App() {
             />
           ) : screen === "relatorios" ? (
             <Reports
-              entries={entries.filter(
+              entries={[...entries, ...adjustments.map(adjustmentEntry)].filter(
                 (entry) =>
                   currentUser.role === "master" ||
                   currentUser.units.includes(entry.unit),
@@ -4807,18 +4853,19 @@ function App() {
                 categories={categories}
                 banks={banks}
                 settle={settle}
-                edit={(x) =>
+                edit={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
                   x.seriesId
                     ? setScopeDialog({ entry: x, action: "editar" })
                     : (setEditScope("one"), setEditing(x), setModal(x.kind))
                 }
                 open={(x) => {
+                    if (x.balanceAdjustment || x.creditCardId) { setScreen(x.balanceAdjustment ? "contas" : "cartoes"); return; }
                   // Atalho: edita só este mês, sem perguntar "Este mês / Toda a série".
                   setEditScope("one");
                   setEditing(x);
                   setModal(x.kind);
                 }}
-                remove={(x) =>
+                remove={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
                   x.seriesId
                     ? setScopeDialog({ entry: x, action: "excluir" })
                     : remove(x, "one")

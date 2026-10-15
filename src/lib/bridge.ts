@@ -49,6 +49,7 @@ async function withFreshSession<T>(write: () => PromiseLike<{ data: T; error: an
 function entryRow(entry: any) {
   return {
     id: entry.id,
+    ...(entry.creditCardId !== undefined ? {credit_card_id:entry.creditCardId,invoice_month:entry.invoiceMonth} : {}),
     series_id: uuid(entry.seriesId) ? entry.seriesId : null,
     kind: entry.kind,
     unit: entry.unit,
@@ -312,4 +313,14 @@ export async function saveBank(bank: { id: string; name: string }) {
 
 export async function deleteBank(id: string) {
   await withFreshSession(() => supabase.from("banks").delete().eq("id", id));
+}
+
+export async function saveCreditCard(card: import('./credit').CreditCard) {
+ return withFreshSession(() => supabase.from('credit_cards').upsert(card).select('*').single()) as Promise<import('./credit').CreditCard>;
+}
+export async function payCreditInvoice(cardId:string, month:string, bankId:string, date:string) {
+ return withFreshSession(() => supabase.rpc('pay_personal_card_invoice',{target_card:cardId,target_month:month,target_bank:bankId,payment_date:date}));
+}
+export async function setBankBalance(bankId:string, balance:number, date:string) {
+ return withFreshSession(() => supabase.rpc('set_personal_bank_balance',{target_bank:bankId,desired_balance:balance,effective_date:date}));
 }
