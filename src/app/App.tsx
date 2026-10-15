@@ -10,6 +10,7 @@ import {
   createRemoteCostCenter,
   deleteBank,
   saveBank,
+  saveCardPurchases,
   updateRemoteCostCenter,
   deleteRemoteCostCenter,
   uploadEntryAttachment,
@@ -26,6 +27,7 @@ import {
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/seriesDates";
 import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
 import BanksSection from "./Banks";
+import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
@@ -102,6 +104,12 @@ type Entry = {
   discount?: number;
   bankId?: string | null;
   creditCardId?: string | null;
+  cardPurchaseDate?: string | null;
+  cardInstallmentOffset?: number;
+  invoiceSummary?: boolean;
+  invoicePaidAmount?: number;
+  invoicePendingAmount?: number;
+  invoiceUnits?: string[];
   invoiceMonth?: string | null;
   balanceAdjustment?: boolean;
 };
@@ -315,7 +323,7 @@ const contactsWithLegacyEntries = (saved: Counterparty[], entries: Entry[]) => {
 type SameMonthPart = { date: string; amount: string };
 
 
-function nextRecurringEntries(entries: Entry[]) {
+function nextRecurringEntries(entries: Entry[], cards: PersonalCreditCard[]) {
   const startOfCurrentMonth = new Date(
     new Date().getFullYear(),
     new Date().getMonth(),
@@ -326,11 +334,11 @@ function nextRecurringEntries(entries: Entry[]) {
     new Date().getMonth() + 36,
     0,
   );
-  const generated: Entry[] = [];
+  const generated: Entry[] = extendCardRecurrences(entries,cards,localDateKey(startOfCurrentMonth),localDateKey(endOfWindow),recurringOccurrenceId);
   const series = new Map<string, Entry[]>();
 
   entries
-    .filter((entry) => entry.recurrence !== "nenhuma" && entry.seriesId)
+    .filter((entry) => !entry.creditCardId && entry.recurrence !== "nenhuma" && entry.seriesId)
     .forEach((entry) => {
       const group = series.get(entry.seriesId!) || [];
       group.push(entry);
@@ -1219,8 +1227,11 @@ function ContactsScreen({
   );
 }
 
-function EntryForm({
+export function EntryForm({
   kind: initial,
+  cardMode,
+  onNewCategory,
+  onNewCenter,
   categories,
   contacts,
   contactsTableReady,
@@ -1232,6 +1243,9 @@ function EntryForm({
   close,
   save,
 }: {
+  cardMode?: PersonalCreditCard;
+  onNewCategory?: () => void;
+  onNewCenter?: () => void;
   kind: Kind;
   categories: Category[];
   contacts: Counterparty[];
@@ -1400,7 +1414,7 @@ function EntryForm({
   }, [kind, unit, categories]);
   const monthlyPreview = !recurrence && !sameMonthInstallments && installments > 1 && date &&
     Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
-      ? monthlyParts(installments, parseMoney(amount), date) : [];
+      ? (cardMode ? cardSchedule({amount:parseMoney(amount),date,recurrence:"nenhuma",installments},cardMode) : monthlyParts(installments, parseMoney(amount), date)) : [];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const v = parseMoney(amount);
@@ -1493,14 +1507,14 @@ function EntryForm({
           notes,
           amount: v,
           date,
-          status,
+          status: cardMode ? "previsto" : status,
           recurrence: recurrence ? frequency : "nenhuma",
           installments: sameMonthInstallments ? 1 : installments,
           attachments,
           juros: kind === "despesa" ? finalJuros : 0,
-          paidDate: status === "realizado" ? paidDate || date : null,
+          paidDate: !cardMode && status === "realizado" ? paidDate || date : null,
           discount: kind === "despesa" ? finalDiscount : 0,
-          bankId: bankId || null,
+          bankId: cardMode ? null : bankId || null,
         },
         scope,
         sameMonthInstallments ? sameMonthPartsState : undefined,
@@ -1542,7 +1556,7 @@ function EntryForm({
         <header className="flex items-center justify-between border-b px-6 py-4">
           <div>
             <h2 className="font-extrabold text-[#191918]">
-              {editing ? "Editar" : "Novo"} lançamento
+              {editing ? "Editar" : "Novo"} lançamento{cardMode ? ` no cartão ${cardMode.name}` : ""}
             </h2>
             <p className="text-xs text-gray-400">
               A categoria é filtrada pelo plano de contas do centro escolhido.
@@ -1597,8 +1611,9 @@ function EntryForm({
               </select>
             </label>
           </div>
+          {cardMode && <div className="flex flex-wrap gap-3"><button type="button" onClick={onNewCenter} className="text-xs font-bold text-brand-700">+ Novo centro de custo</button><button type="button" onClick={onNewCategory} className="text-xs font-bold text-brand-700">+ Nova categoria / plano de contas</button></div>}
           <label className="block text-xs font-bold">
-            Categoria
+            {cardMode ? "Categoria / plano de contas" : "Categoria"}
             <select
               required
               value={category}
@@ -1807,7 +1822,7 @@ function EntryForm({
               <CurrencyInput value={amount} onChange={setAmount} />
             </label>
             <label className="text-xs font-bold">
-              Data
+              {cardMode ? "Data da compra / início da assinatura" : "Data"}
               <input
                 required
                 type="date"
@@ -1816,7 +1831,7 @@ function EntryForm({
                 className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
               />
             </label>
-            <label className="text-xs font-bold">
+            {!cardMode && <label className="text-xs font-bold">
               Situação
               <select
                 value={status}
@@ -1826,9 +1841,9 @@ function EntryForm({
                 <option value="previsto">Previsto</option>
                 <option value="realizado">Realizado</option>
               </select>
-            </label>
+            </label>}
           </div>
-          {(kind === "despesa" || status === "realizado") && (
+          {!cardMode && (kind === "despesa" || status === "realizado") && (
             <div className="grid gap-4 sm:grid-cols-2">
               {showPaidValue && (
                 <label className="text-xs font-bold">
@@ -1860,14 +1875,15 @@ function EntryForm({
 
             </div>
           )}
-          <label className="block text-xs font-bold">
+          {!cardMode && <label className="block text-xs font-bold">
             {kind === "receita" ? "Conta bancária de recebimento" : "Conta bancária de pagamento"}
             <select value={bankId} onChange={(e) => setBankId(e.target.value)} className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal">
               <option value="">Não informada</option>
               {banks.map((bank) => <option key={bank.id} value={bank.id}>{bank.name}</option>)}
             </select>
             <span className="mt-1 block font-normal text-slate-400">{banks.length ? "Define a conta usada na movimentação. Centros de custo são escolhidos separadamente." : "Cadastre uma conta bancária na aba Contas."}</span>
-          </label>
+          </label>}
+          {cardMode && <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-800">Esta compra compõe a fatura do cartão. O vencimento segue o fechamento do cartão; a conta bancária será escolhida ao pagar a fatura. Assinaturas: marque Repetir valor fixo. Parcelamentos: informe a quantidade de meses.</p>}
           {converting && (
             <p className="rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-800">
               Ao salvar, este lançamento será substituído pelas parcelas abaixo (os anexos são mantidos).
@@ -1916,7 +1932,7 @@ function EntryForm({
                     checked={scope === "one"}
                     onChange={() => setScope("one")}
                   />{" "}
-                  Este mês
+                  {cardMode ? "Esta compra" : "Este mês"}
                 </span>
                 <span>
                   <input
@@ -1924,7 +1940,7 @@ function EntryForm({
                     checked={scope === "series"}
                     onChange={() => setScope("series")}
                   />{" "}
-                  Toda a série
+                  {cardMode ? "Em aberto da série" : "Toda a série"}
                 </span>
               </label>
             )}
@@ -2055,7 +2071,7 @@ function EntryForm({
             {recurrence && !sameMonthInstallments && (
               <p className="col-span-full text-xs text-brand-700">
                 O valor será repetido {frequency === "semanal" ? "a cada 7 dias, no mesmo dia da semana" : "mensalmente"}, sem divisão.
-                {frequency === "semanal" && date && <span className="mt-2 block">Próximos vencimentos: {[0,1,2,3].map(i=>addDays(date,i*7).split('-').reverse().join('/')).join(' · ')}. Cada ocorrência futura começa como prevista.</span>}
+                {frequency === "semanal" && date && <span className="mt-2 block">{cardMode ? "Próximas compras:" : "Próximos vencimentos:"} {[0,1,2,3].map(i=>addDays(date,i*7).split('-').reverse().join('/')).join(' · ')}. Cada ocorrência futura começa como prevista.</span>}
               </p>
             )}
             {recurrence && sameMonthInstallments && (
@@ -2067,7 +2083,7 @@ function EntryForm({
             {!recurrence && !sameMonthInstallments && installments > 1 && (
               <section className="col-span-full rounded-xl border bg-white p-3" aria-label="Prévia das parcelas mensais">
                 <h3 className="text-sm font-extrabold">Uma parcela por mês · {installments} meses</h3>
-                <p className="mt-1 text-xs text-slate-500">O valor total será dividido entre os meses abaixo. A primeira data é a do lançamento; cada parcela seguinte avança um mês.</p>
+                <p className="mt-1 text-xs text-slate-500">O valor total será dividido entre os meses abaixo.{cardMode ? " No cartão, as datas abaixo já são os vencimentos de cada fatura." : " A primeira data é a do lançamento; cada parcela seguinte avança um mês."}</p>
                 <div className="mt-3 max-h-72 overflow-y-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b"><th className="p-2">Parcela</th><th>Vencimento</th><th className="text-right">Valor</th></tr></thead><tbody>
                   {monthlyPreview.map(part => <tr key={part.installment} className="border-b"><td className="p-2">{part.installment}</td><td>{part.date.split('-').reverse().join('/')}</td><td className="text-right">{fmt(part.amount)}</td></tr>)}
                 </tbody></table></div>
@@ -2248,8 +2264,9 @@ function Entries({
                   {x.kind === "receita" ? "+" : "-"}
                   {fmt(entryValue(x))}
                 </p>
+                {x.invoiceSummary && <p className="mt-1 text-[11px] text-slate-500">Pago {fmt(x.invoicePaidAmount||0)} · Em aberto {fmt(x.invoicePendingAmount||0)}</p>}
                 <p className="text-[10px] font-bold uppercase text-gray-400">
-                  {entryScheduleLabel(x)}
+                  {x.invoiceSummary ? "Fatura total" : entryScheduleLabel(x)}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -2257,7 +2274,7 @@ function Entries({
                   onClick={() => edit(x)}
                   className="rounded-lg border px-2 py-1.5 text-[11px] font-bold"
                 >
-                  Editar
+                  {x.creditCardId ? "Detalhar fatura" : "Editar"}
                 </button>
                 {!x.balanceAdjustment && !x.creditCardId && <button
                   onClick={() => remove(x)}
@@ -3162,6 +3179,7 @@ function App() {
     [banks, setBanks] = useState<Bank[]>([]),
     [banksReady, setBanksReady] = useState(false),
     [cards, setCards] = useState<PersonalCreditCard[]>([]),
+    [cardFocus, setCardFocus] = useState<{cardId:string;month:string}|null>(null),
     [adjustments, setAdjustments] = useState<BalanceAdjustment[]>([]),
     [categories, setCategories] = useState<Category[]>([]),
     [centers, setCenters] = useState<CostCenter[]>([]),
@@ -3289,7 +3307,7 @@ function App() {
           paidDate: row.paid_date || undefined,
           discount: row.discount != null ? Number(row.discount) : undefined,
           bankId: row.bank_id === undefined ? undefined : row.bank_id,
-          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month,
+          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset,
         })) as Entry[];
         // The new registry has its own migration. Until it is applied, the
         // old production database and existing launches must remain readable.
@@ -3319,11 +3337,17 @@ function App() {
         }
         // Keep recurring series alive without pre-creating decades of records.
         // Only missing months inside the rolling three-year window are written.
-        const projectedEntries = nextRecurringEntries(loadedEntries);
+        const [cardRows, adjustmentRows] = await Promise.all([
+          readAuthenticatedRows<PersonalCreditCard>("credit_cards", "name.asc"),
+          readAuthenticatedRows<BalanceAdjustment>("bank_balance_adjustments", "date.asc"),
+        ]);
+        const projectedEntries = nextRecurringEntries(loadedEntries,cardRows);
         let entriesToShow = loadedEntries;
         if (projectedEntries.length) {
           try {
-            await saveRemoteEntries(projectedEntries);
+            const regular=projectedEntries.filter(e=>!e.creditCardId), purchases=projectedEntries.filter(e=>e.creditCardId);
+            if(regular.length)await saveRemoteEntries(regular);
+            if(purchases.length)await saveCardPurchases(purchases);
             entriesToShow = [...projectedEntries, ...loadedEntries];
           } catch (projectionError) {
             // Existing financial data remains available even if extending the
@@ -3334,11 +3358,6 @@ function App() {
             );
           }
         }
-        if (!active) return;
-        const [cardRows, adjustmentRows] = await Promise.all([
-          readAuthenticatedRows<PersonalCreditCard>("credit_cards", "name.asc"),
-          readAuthenticatedRows<BalanceAdjustment>("bank_balance_adjustments", "date.asc"),
-        ]);
         if (!active) return;
         setCards(cardRows); setAdjustments(adjustmentRows);
         setEntries(entriesToShow);
@@ -3387,7 +3406,7 @@ function App() {
           ...row, seriesId: row.series_id || undefined, counterpartyId: row.counterparty_id ?? undefined,
           amount: Number(row.amount), juros: Number(row.juros || 0), paidDate: row.paid_date || undefined,
           discount: Number(row.discount || 0), bankId: row.bank_id ?? null,
-          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month,
+          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset,
         })) as Entry[]);
         setCards(cardRows); setAdjustments(adjustmentRows);
         setCategories(categoryRows);
@@ -3573,15 +3592,13 @@ function App() {
       (x) =>
         currentUser.role === "master" || currentUser.units.includes(x.unit),
     ),
-    pending = visible.filter(
-      (x) => x.status === "previsto" && x.date <= today,
-    ),
-    overdue = visible.filter(
-      (x) => x.status === "previsto" && x.date < today,
-    ),
+    invoiceDisplay = cardInvoices(visible,cards),
+    pending = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date <= today),cards),
+    overdue = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date < today),cards),
     overduePay = overdue.filter((x) => x.kind === "despesa"),
     overdueReceive = overdue.filter((x) => x.kind === "receita"),
     current = visible.filter((x) => cashDate(x).startsWith(key)),
+    currentDisplay = cardInvoices(current,cards),
     localDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
     todayStr = localDate(new Date()),
@@ -3606,10 +3623,8 @@ function App() {
       const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       return { start: localDate(first), end: localDate(last), label: labelMonth(month) };
     })(),
-    listCurrent = visible.filter((x) => cashDate(x) >= period.start && cashDate(x) <= period.end),
-    payToday = visible.filter(
-      (x) => x.kind === "despesa" && x.status === "previsto" && x.date === todayStr,
-    ),
+    listCurrent = invoiceDisplay.filter((x) => cashDate(x) >= period.start && cashDate(x) <= period.end),
+    payToday = cardInvoices(visible.filter(x=>x.kind === "despesa" && x.status === "previsto" && x.date === todayStr),cards),
     payTodayTotal = payToday.reduce((s, x) => s + x.amount, 0),
     totals = summarizeFinancialEntries(current),
     position = cashPosition(visible, `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
@@ -3647,6 +3662,10 @@ function App() {
       setNotificationsOpen(false);
       setScreen("lancamentos");
     };
+  const openFinancialEntry = (entry:Entry) => {
+    if(entry.creditCardId){setCardFocus({cardId:entry.creditCardId,month:entry.invoiceMonth||entry.date.slice(0,7)});setScreen("cartoes");}
+    else if(entry.balanceAdjustment)setScreen("contas");
+  };
   const refreshPersonal = async () => {
     const [rows, adjustmentRows, bankRows, cardRows] = await Promise.all([
       readAuthenticatedRows<any>("entries", "date.desc"),
@@ -3655,7 +3674,7 @@ function App() {
       readAuthenticatedRows<PersonalCreditCard>("credit_cards", "name.asc"),
     ]);
     setEntries(rows.map(row => ({...row, amount:Number(row.amount), juros:Number(row.juros||0), discount:Number(row.discount||0),
-      paidDate:row.paid_date, bankId:row.bank_id, seriesId:row.series_id, creditCardId:row.credit_card_id, invoiceMonth:row.invoice_month})));
+      paidDate:row.paid_date, bankId:row.bank_id, seriesId:row.series_id, creditCardId:row.credit_card_id, invoiceMonth:row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset})));
     setAdjustments(adjustmentRows); setBanks(bankRows); setCards(cardRows);
     setSyncVersion(v=>v+1);
   };
@@ -3807,7 +3826,7 @@ function App() {
       void refreshContacts();
     },
     settle = async (x: Entry) => {
-      if (x.balanceAdjustment || x.creditCardId) { setScreen(x.balanceAdjustment ? "contas" : "cartoes"); return; }
+      if (x.balanceAdjustment || x.creditCardId) { openFinancialEntry(x); return; }
       const becomingPaid = x.status !== "realizado";
       const updated = {
         ...x,
@@ -3841,13 +3860,13 @@ function App() {
     },
     searchText = normalizeSearch(search),
     // Com texto na busca, procura em todos os meses (os outros filtros valem).
-    list = (entryFilter === "atrasadas" ? overdue : searchText ? visible : listCurrent)
+    list = (entryFilter === "atrasadas" ? overdue : searchText ? invoiceDisplay : listCurrent)
       .filter(
         (x) =>
           !searchText ||
           normalizeSearch(`${x.description} ${x.beneficiary || ""}`).includes(searchText),
       )
-      .filter((x) => filter === "Todos" || x.unit === filter)
+      .filter((x) => filter === "Todos" || x.unit === filter || x.invoiceUnits?.includes(filter))
       .filter(
         (x) =>
           entryFilter === "todos" ||
@@ -3859,7 +3878,7 @@ function App() {
             x.status === "previsto") ||
           (entryFilter === "pagas" &&
             x.kind === "despesa" &&
-            x.status === "realizado") ||
+            (x.status === "realizado" || (x.invoicePaidAmount || 0)>0)) ||
           (entryFilter === "recebidas" &&
             x.kind === "receita" &&
             x.status === "realizado") ||
@@ -3895,7 +3914,8 @@ function App() {
     // Detalhe dos totais da lista: realizado (pago/recebido) x previsto.
     listDetail = list.reduce(
       (detail, entry) => {
-        detail[entry.kind][entry.status] += entryValue(entry);
+        if(entry.invoiceSummary){detail.despesa.realizado+=entry.invoicePaidAmount||0;detail.despesa.previsto+=entry.invoicePendingAmount||0;}
+        else detail[entry.kind][entry.status] += entryValue(entry);
         return detail;
       },
       {
@@ -4282,7 +4302,7 @@ function App() {
               </section>
               <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
                 <h2 className="font-extrabold text-[#191918]">Resumo dos lançamentos do mês</h2>
-                <p className="mt-1 text-xs text-slate-500">{current.length} lançamento(s). Realizados por pagamento e previstos por vencimento. Os previstos entram em A pagar / A receber; os realizados em Pagas / Recebidas.</p>
+                <p className="mt-1 text-xs text-slate-500">{currentDisplay.length} lançamento(s). Realizados por pagamento e previstos por vencimento. Os previstos entram em A pagar / A receber; os realizados em Pagas / Recebidas.</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {isMaster && <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Receitas totais do mês</p><b className="text-xl text-emerald-700">{fmt(totals.totalIncome)}</b></div>}
                   <div className="rounded-xl bg-red-50 p-4"><p className="text-xs font-bold text-red-800">Despesas totais do mês</p><b className="text-xl text-red-700">{fmt(totals.totalExpense)}</b></div>
@@ -4405,27 +4425,27 @@ function App() {
                   Lançamentos de {labelMonth(month)}
                 </h2>
                 <p className="mb-4 text-xs text-gray-400">
-                  Mostrando {Math.min(current.length, 5)} de {current.length} lançamento(s) do mês, ordenados por vencimento.
+                  Mostrando {Math.min(currentDisplay.length, 5)} de {currentDisplay.length} lançamento(s) do mês, ordenados por vencimento.
                 </p>
-                <button type="button" onClick={() => { setFilter("Todos"); setCounterpartyFilter("todos"); setSearch(""); setEntryFilter("todos"); setPeriodMode("mes"); setScreen("lancamentos"); }} className="mb-4 rounded-xl border border-brand-200 px-3 py-2 text-xs font-bold text-brand-700">Ver todos os {current.length} lançamentos do mês</button>
+                <button type="button" onClick={() => { setFilter("Todos"); setCounterpartyFilter("todos"); setSearch(""); setEntryFilter("todos"); setPeriodMode("mes"); setScreen("lancamentos"); }} className="mb-4 rounded-xl border border-brand-200 px-3 py-2 text-xs font-bold text-brand-700">Ver todos os {currentDisplay.length} lançamentos do mês</button>
                 <Entries
-                  entries={[...current].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)}
+                  entries={[...currentDisplay].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)}
                   categories={categories}
                   banks={banks}
                   settle={settle}
-                  edit={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
+                  edit={(x) => (x.balanceAdjustment || x.creditCardId) ? openFinancialEntry(x) :
                     x.seriesId
                       ? setScopeDialog({ entry: x, action: "editar" })
                       : (setEditScope("one"), setEditing(x), setModal(x.kind))
                   }
                   open={(x) => {
-                    if (x.balanceAdjustment || x.creditCardId) { setScreen(x.balanceAdjustment ? "contas" : "cartoes"); return; }
+                    if (x.balanceAdjustment || x.creditCardId) { openFinancialEntry(x); return; }
                     // Atalho: edita só este mês, sem perguntar "Este mês / Toda a série".
                     setEditScope("one");
                     setEditing(x);
                     setModal(x.kind);
                   }}
-                  remove={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
+                  remove={(x) => (x.balanceAdjustment || x.creditCardId) ? openFinancialEntry(x) :
                     x.seriesId
                       ? setScopeDialog({ entry: x, action: "excluir" })
                       : remove(x, "one")
@@ -4436,7 +4456,9 @@ function App() {
           ) : screen === "contas" ? (
             <BanksSection banks={banks} ready={banksReady} canManage={isMaster} entries={visible} setBanks={setBanks} onRefresh={refreshPersonal} />
           ) : screen === "cartoes" ? (
-            <CreditCards cards={cards} setCards={setCards} banks={banks} entries={entries} centers={centers} categories={categories} onRefresh={refreshPersonal} />
+            <CreditCards key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={entries} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")}
+              renderForm={(purchase,savePurchase,close,card)=><EntryForm kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}
+            />
           ) : screen === "contatos" ? (
             <ContactsScreen
               contacts={contacts}
@@ -4855,19 +4877,19 @@ function App() {
                 categories={categories}
                 banks={banks}
                 settle={settle}
-                edit={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
+                edit={(x) => (x.balanceAdjustment || x.creditCardId) ? openFinancialEntry(x) :
                   x.seriesId
                     ? setScopeDialog({ entry: x, action: "editar" })
                     : (setEditScope("one"), setEditing(x), setModal(x.kind))
                 }
                 open={(x) => {
-                    if (x.balanceAdjustment || x.creditCardId) { setScreen(x.balanceAdjustment ? "contas" : "cartoes"); return; }
+                    if (x.balanceAdjustment || x.creditCardId) { openFinancialEntry(x); return; }
                   // Atalho: edita só este mês, sem perguntar "Este mês / Toda a série".
                   setEditScope("one");
                   setEditing(x);
                   setModal(x.kind);
                 }}
-                remove={(x) => (x.balanceAdjustment || x.creditCardId) ? setScreen(x.balanceAdjustment ? "contas" : "cartoes") :
+                remove={(x) => (x.balanceAdjustment || x.creditCardId) ? openFinancialEntry(x) :
                   x.seriesId
                     ? setScopeDialog({ entry: x, action: "excluir" })
                     : remove(x, "one")

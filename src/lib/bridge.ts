@@ -49,6 +49,8 @@ async function withFreshSession<T>(write: () => PromiseLike<{ data: T; error: an
 function entryRow(entry: any) {
   return {
     id: entry.id,
+    ...(entry.cardPurchaseDate !== undefined ? {purchase_date:entry.cardPurchaseDate} : {}),
+    ...(entry.cardInstallmentOffset !== undefined ? {card_installment_offset:entry.cardInstallmentOffset} : {}),
     ...(entry.creditCardId !== undefined ? {credit_card_id:entry.creditCardId,invoice_month:entry.invoiceMonth} : {}),
     series_id: uuid(entry.seriesId) ? entry.seriesId : null,
     kind: entry.kind,
@@ -323,4 +325,15 @@ export async function payCreditInvoice(cardId:string, month:string, bankId:strin
 }
 export async function setBankBalance(bankId:string, balance:number, date:string) {
  return withFreshSession(() => supabase.rpc('set_personal_bank_balance',{target_bank:bankId,desired_balance:balance,effective_date:date}));
+}
+export async function cancelCardSeries(seriesId:string) {
+ return withFreshSession(()=>supabase.rpc('cancel_personal_card_series',{target_series:seriesId}));
+}
+
+export async function saveCardPurchases(entries:any[]) {
+ await withFreshSession(()=>supabase.rpc('save_personal_card_purchases',{purchases:entries.map(entryRow)}));
+}
+
+export async function deleteCardPurchase(id:string) {
+ return withFreshSession(()=>supabase.rpc('delete_personal_card_purchase',{target_id:id}));
 }

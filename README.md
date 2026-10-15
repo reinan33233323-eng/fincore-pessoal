@@ -28,3 +28,7 @@ Cartões possuem fechamento e vencimento próprios. Compras à vista ou parcelad
 Em Contas, **Editar saldo** informa o saldo total ao final da data escolhida. O banco calcula e guarda somente a diferença em um histórico separado, sem sobrescrever lançamentos. Ajustes também aparecem identificados no dashboard e nos relatórios. O saldo anterior é transportado entre meses. Realizados usam a data de pagamento; previstos usam vencimento.
 
 Migração exclusiva desta instalação: `supabase/migrations/20261015100000_personal_credit_and_balances.sql`.
+
+A área Cartões de crédito usa o formulário completo de despesas: plano de contas, centro de custo, fornecedor, anexos, parcelas e recorrências mensais ou semanais. Compras são detalhadas e filtradas nessa área. Em Lançamentos, cada cartão/mês aparece como uma única fatura com o total, o valor pago e o valor em aberto. Os registros detalhados continuam alimentando os relatórios por categoria, e o pagamento da fatura debita o banco uma única vez. Cancelar uma recorrência remove apenas compras em aberto e mantém os pagamentos.
+
+Migração dos detalhes do cartão: `supabase/migrations/20261015140000_card_purchase_details.sql`.
