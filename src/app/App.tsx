@@ -1416,8 +1416,8 @@ export function EntryForm({
     Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
       ? (cardMode ? cardSchedule({amount:parseMoney(amount),date,recurrence:"nenhuma",installments},cardMode) : monthlyParts(installments, parseMoney(amount), date)) : [];
   const purchaseInvoiceDue = cardMode && /^\d{4}-\d{2}-\d{2}$/.test(date)
-    ? (editing && date === (editing.cardPurchaseDate || editing.date)
-      ? editing.date : invoiceDate(date, cardMode, editing?.cardInstallmentOffset || 0)) : "";
+    ? (editing?.invoiceMonth && date === (editing.cardPurchaseDate || editing.date)
+      ? invoiceCycle(editing.invoiceMonth,cardMode).due : invoiceDate(date, cardMode, editing?.cardInstallmentOffset || 0)) : "";
   const purchaseCycle = cardMode && purchaseInvoiceDue ? invoiceCycle(purchaseInvoiceDue.slice(0,7),cardMode) : null;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
