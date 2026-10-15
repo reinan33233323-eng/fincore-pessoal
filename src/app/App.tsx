@@ -536,9 +536,6 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     [password, setPassword] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const monthlyPreview = !recurrence && !sameMonthInstallments && installments > 1 && date &&
-    Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
-      ? monthlyParts(installments, parseMoney(amount), date) : [];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -1392,6 +1389,9 @@ function EntryForm({
     if (!available.some((c) => c.name === category))
       setCategory(available[0]?.name ?? "");
   }, [kind, unit, categories]);
+  const monthlyPreview = !recurrence && !sameMonthInstallments && installments > 1 && date &&
+    Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
+      ? monthlyParts(installments, parseMoney(amount), date) : [];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const v = parseMoney(amount);
