@@ -3027,7 +3027,7 @@ function Reports({
       {incomeVisible && (
       <section className="rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="font-extrabold text-[#191918]">
-          Movimento realizado por conta bancária no período
+          Saldo final por conta bancária no período
         </h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {accountRows.map((item) => (
@@ -3038,7 +3038,7 @@ function Reports({
               className="rounded-xl border p-4 text-left transition hover:border-brand-300 hover:shadow-sm"
             >
               <p className="font-bold text-slate-800">{item.name}</p>
-              <p className="text-xs text-gray-400">Entradas menos saídas realizadas</p>
+              <p className="text-xs text-gray-400">Saldo anterior mais movimentações realizadas</p>
               <p
                 className={`mt-3 text-lg font-extrabold ${item.balance >= 0 ? "text-brand-700" : "text-red-600"}`}
               >
