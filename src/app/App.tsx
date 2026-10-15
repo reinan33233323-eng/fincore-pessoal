@@ -96,7 +96,7 @@ type Entry = {
   notes?: string;
   attachments?: string[];
   juros?: number;
-  paidDate?: string;
+  paidDate?: string | null;
   discount?: number;
   bankId?: string | null;
   creditCardId?: string | null;
@@ -1508,7 +1508,7 @@ function EntryForm({
           installments: sameMonthInstallments ? 1 : installments,
           attachments,
           juros: kind === "despesa" ? finalJuros : 0,
-          paidDate: kind === "despesa" ? paidDate || undefined : undefined,
+          paidDate: status === "realizado" ? paidDate || date : null,
           discount: kind === "despesa" ? finalDiscount : 0,
           bankId: bankId || null,
         },
@@ -1838,7 +1838,7 @@ function EntryForm({
               </select>
             </label>
           </div>
-          {kind === "despesa" && (
+          {(kind === "despesa" || status === "realizado") && (
             <div className="grid gap-4 sm:grid-cols-2">
               {showPaidValue && (
                 <label className="text-xs font-bold">
@@ -1858,7 +1858,7 @@ function EntryForm({
                 </label>
               )}
               <label className="text-xs font-bold">
-                Data do pagamento
+                {kind === "receita" ? "Data do recebimento" : "Data do pagamento"}
                 <input
                   type="date"
                   value={paidDate}
@@ -2258,17 +2258,17 @@ function Entries({
                 >
                   Editar
                 </button>
-                <button
+                {!x.balanceAdjustment && !x.creditCardId && <button
                   onClick={() => remove(x)}
                   className="rounded-lg border border-red-200 px-2 py-1.5 text-[11px] font-bold text-red-600"
                 >
                   Excluir
-                </button>
+                </button>}
                 <button
                   onClick={() => settle(x)}
                   className={`rounded-lg px-2 py-1.5 text-[11px] font-bold ${x.status === "realizado" ? "bg-emerald-50 text-emerald-700" : x.kind === "despesa" ? "bg-orange-600 text-white" : "bg-emerald-600 text-white"}`}
                 >
-                  {x.status === "realizado"
+                  {x.balanceAdjustment ? "Editar saldo" : x.creditCardId ? "Ver fatura" : x.status === "realizado"
                     ? "Baixado - reverter"
                     : x.kind === "despesa"
                       ? "Dar baixa"
@@ -3807,11 +3807,8 @@ function App() {
       const updated = {
         ...x,
         status: becomingPaid ? "realizado" : "previsto",
-        // Em despesas, registra a data do pagamento ao dar baixa (se vazia)
-        // para medir o atraso; ao reverter, limpa a data.
-        ...(x.kind === "despesa"
-          ? { paidDate: becomingPaid ? x.paidDate || todayStr : undefined }
-          : {}),
+        // Settlement is a new cash movement today; reversal clears its date.
+        paidDate: becomingPaid ? todayStr : null,
       } as Entry;
       await saveRemoteEntries([updated]);
       setEntries((old) => old.map((v) => (v.id === x.id ? updated : v)));
