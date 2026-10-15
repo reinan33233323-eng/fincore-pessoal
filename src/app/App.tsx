@@ -26,6 +26,7 @@ import {
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/seriesDates";
 import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
 import BanksSection from "./Banks";
+import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
 import { adjustmentEntry, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
@@ -91,7 +92,7 @@ type Entry = {
   amount: number;
   date: string;
   status: "previsto" | "realizado";
-  recurrence: "nenhuma" | "mensal";
+  recurrence: "nenhuma" | "mensal" | "semanal";
   installments: number;
   installment?: string;
   notes?: string;
@@ -258,10 +259,10 @@ const icons = [
   ];
 const id = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const entryScheduleLabel = (entry: Entry) =>
-  entry.recurrence === "mensal"
+  entry.recurrence !== "nenhuma"
     ? entry.installment
-      ? `Recorrente mensal · Parcela ${entry.installment}`
-      : "Recorrente mensal"
+      ? `Recorrente ${entry.recurrence} · Parcela ${entry.installment}`
+      : `Recorrente ${entry.recurrence}`
     : entry.installment
       ? `Parcela ${entry.installment}`
       : "Lançamento único";
@@ -329,7 +330,7 @@ function nextRecurringEntries(entries: Entry[]) {
   const series = new Map<string, Entry[]>();
 
   entries
-    .filter((entry) => entry.recurrence === "mensal" && entry.seriesId)
+    .filter((entry) => entry.recurrence !== "nenhuma" && entry.seriesId)
     .forEach((entry) => {
       const group = series.get(entry.seriesId!) || [];
       group.push(entry);
@@ -337,6 +338,13 @@ function nextRecurringEntries(entries: Entry[]) {
     });
 
   series.forEach((occurrences) => {
+    if (occurrences[0].recurrence === "semanal") {
+      const latest = [...occurrences].sort((a,b)=>b.date.localeCompare(a.date))[0];
+      for (const date of nextWeeklyDates(latest.date, localDateKey(startOfCurrentMonth), localDateKey(endOfWindow))) {
+        generated.push({...latest, id:recurringOccurrenceId(latest.seriesId!,date,""), date, status:"previsto", paidDate:null, juros:0, discount:0});
+      }
+      return;
+    }
     const latestMonth = [...occurrences]
       .map((entry) => entry.date.slice(0, 7))
       .sort()
@@ -1270,7 +1278,7 @@ function EntryForm({
         ? String(Math.round((editing.amount + (editing.juros ?? 0) - (editing.discount ?? 0)) * 100) / 100)
         : "",
     ),
-    [bankId, setBankId] = useState<string>(editing?.bankId ?? ""),
+    [bankId, setBankId] = useState<string>(() => editing ? editing.bankId ?? "" : defaultBankId(banks)),
     [dragging, setDragging] = useState(false),
     [paidDate, setPaidDate] = useState(editing?.paidDate ?? ""),
     [amount, setAmount] = useState(editing ? String(editing.amount) : ""),
@@ -1280,7 +1288,8 @@ function EntryForm({
     [status, setStatus] = useState<Entry["status"]>(
       editing?.status ?? "previsto",
     ),
-    [recurrence, setRecurrence] = useState(editing?.recurrence === "mensal"),
+    [recurrence, setRecurrence] = useState(Boolean(editing && editing.recurrence !== "nenhuma")),
+    [frequency, setFrequency] = useState<"mensal" | "semanal">(editing?.recurrence === "semanal" ? "semanal" : "mensal"),
     [installments, setInstallments] = useState(editing?.installments ?? 1),
     [sameMonthInstallments, setSameMonthInstallments] = useState(false),
     [sameMonthPartCount, setSameMonthPartCount] = useState(2),
@@ -1485,7 +1494,7 @@ function EntryForm({
           amount: v,
           date,
           status,
-          recurrence: recurrence ? "mensal" : "nenhuma",
+          recurrence: recurrence ? frequency : "nenhuma",
           installments: sameMonthInstallments ? 1 : installments,
           attachments,
           juros: kind === "despesa" ? finalJuros : 0,
@@ -1875,8 +1884,14 @@ function EntryForm({
                 }}
               />
               <Repeat2 className="h-4 w-4 text-brand-600" />
-              Recorrente mensal
+              Repetir valor fixo
             </label>
+            {recurrence && <label className="text-xs font-bold">Frequência da recorrência
+              <select value={frequency} disabled={Boolean(editing?.seriesId)} onChange={e=>{setFrequency(e.target.value as "mensal" | "semanal");if(e.target.value === "semanal")setSameMonthInstallments(false);}} className="mt-1 block w-full rounded-xl border bg-white p-2.5 text-sm">
+                <option value="mensal">Mensal — a cada mês</option><option value="semanal">Semanal — a cada 7 dias</option>
+              </select>
+              {editing?.seriesId && <span className="mt-1 block font-normal text-slate-500">Para mudar a frequência, crie uma nova recorrência.</span>}
+            </label>}
             {!recurrence && !sameMonthInstallments && (!editing || standaloneEdit) && (
               <label className="flex items-center gap-2 text-sm font-bold">
                 <CalendarClock className="h-4 w-4 text-brand-600" />
@@ -1913,7 +1928,7 @@ function EntryForm({
                 </span>
               </label>
             )}
-            {(!editing || standaloneEdit) && (
+            {(!editing || standaloneEdit) && (!recurrence || frequency === "mensal") && (
               <div className="col-span-full border-t border-brand-100 pt-3">
                 <label className="flex items-center gap-2 text-sm font-bold">
                   <input
@@ -2039,7 +2054,8 @@ function EntryForm({
             )}
             {recurrence && !sameMonthInstallments && (
               <p className="col-span-full text-xs text-brand-700">
-                O valor será repetido mensalmente, sem divisão.
+                O valor será repetido {frequency === "semanal" ? "a cada 7 dias, no mesmo dia da semana" : "mensalmente"}, sem divisão.
+                {frequency === "semanal" && date && <span className="mt-2 block">Próximos vencimentos: {[0,1,2,3].map(i=>addDays(date,i*7).split('-').reverse().join('/')).join(' · ')}. Cada ocorrência futura começa como prevista.</span>}
               </p>
             )}
             {recurrence && sameMonthInstallments && (
@@ -2965,7 +2981,7 @@ function Reports({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-slate-800" title={entry.description}>{entry.description}</p>
                   <p className="truncate text-xs text-slate-400">{entry.category} · {entry.unit} · {dateLabel(entry.date)}</p>
-                  <p className="text-[11px] text-slate-400">{entry.status === "realizado" ? "Pago" : entry.date < todayKey ? "Vencido" : "A pagar"}{entry.installment ? ` · Parcela ${entry.installment}` : entry.recurrence === "mensal" ? " · Recorrente" : ""}</p>
+                  <p className="text-[11px] text-slate-400">{entry.status === "realizado" ? "Pago" : entry.date < todayKey ? "Vencido" : "A pagar"}{entry.installment ? ` · Parcela ${entry.installment}` : entry.recurrence !== "nenhuma" ? ` · Recorrente ${entry.recurrence}` : ""}</p>
                 </div>
                 <b className="shrink-0 text-sm text-red-600">{fmt(entry.amount)}</b>
               </button>
@@ -3663,7 +3679,7 @@ function App() {
       const replaced =
         editing &&
         !editing.seriesId &&
-        (Boolean(monthParts?.length) || data.recurrence === "mensal" || data.installments > 1)
+        (Boolean(monthParts?.length) || data.recurrence !== "nenhuma" || data.installments > 1)
           ? editing
           : null;
       const finishReplacing = async () => {
@@ -3696,7 +3712,7 @@ function App() {
                 id: x.id,
                 seriesId: x.seriesId,
                 date: isWholeSeries
-                  ? seriesDueDate(occurrences, editing, x, data.date)
+                  ? (x.recurrence === "semanal" ? shiftWeeklyDate(x.date, editing.date, data.date) : seriesDueDate(occurrences, editing, x, data.date))
                   : data.date,
                 installment: x.installment,
               }
@@ -3760,23 +3776,26 @@ function App() {
         return;
       }
       const seriesId =
-          data.recurrence === "mensal" || data.installments > 1
+          data.recurrence !== "nenhuma" || data.installments > 1
             ? id()
             : undefined,
-        count = data.recurrence === "mensal" ? 36 : data.installments;
-      const monthlySchedule = data.recurrence === "mensal" ? null : monthlyParts(count, data.amount, data.date);
+        count = data.recurrence === "mensal" ? 36 : data.recurrence === "semanal" ? 156 : data.installments;
+      const monthlySchedule = data.recurrence !== "nenhuma" ? null : monthlyParts(count, data.amount, data.date);
       const created = Array.from({ length: count }, (_, i) => {
         return {
           ...data,
           id: id(),
           seriesId,
           amount:
-            data.recurrence === "mensal"
+            data.recurrence !== "nenhuma"
               ? data.amount
               : monthlySchedule![i].amount,
           // Limita ao último dia do mês: 31/07 + 2 meses = 30/09 (não 01/10).
-          date: monthlySchedule?.[i].date ?? addMonthsClamped(data.date, i),
+          date: data.recurrence === "semanal" ? addDays(data.date,i*7) : monthlySchedule?.[i].date ?? addMonthsClamped(data.date, i),
           status: i === 0 ? data.status : "previsto",
+          paidDate: i === 0 ? data.paidDate : null,
+          juros: i === 0 ? data.juros : 0,
+          discount: i === 0 ? data.discount : 0,
           installments: 1,
           installment:
             data.installments > 1 ? monthlySchedule![i].installment : undefined,

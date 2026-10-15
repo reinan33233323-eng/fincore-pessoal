@@ -3,6 +3,7 @@ import { CreditCard as CardIcon } from 'lucide-react';
 import { saveCreditCard, saveRemoteEntries, payCreditInvoice, deleteRemoteEntries, type Bank } from '../lib/bridge';
 import { invoiceDate, installmentAmounts, type CreditCard } from '../lib/credit';
 import { localDateKey, localMonthKey, type FinancialEntry } from '../lib/finance';
+import { defaultBankId } from '../lib/recurrence';
 import { fmt, CurrencyInput, parseMoney } from './shared';
 
 type CardEntry = FinancialEntry & {id:string;creditCardId?:string|null;invoiceMonth?:string|null;description:string;installment?:string};
@@ -13,7 +14,7 @@ export default function CreditCards({cards,setCards,banks,entries,centers,catego
  const [cardId,setCardId]=useState(cards[0]?.id||''),[month,setMonth]=useState(localMonthKey(new Date()));
  const [name,setName]=useState(''),[closing,setClosing]=useState('25'),[due,setDue]=useState('5'),[editing,setEditing]=useState('');
  const [description,setDescription]=useState(''),[amount,setAmount]=useState(''),[purchaseDate,setPurchaseDate]=useState(today),[parts,setParts]=useState('1');
- const [unit,setUnit]=useState(centers[0]?.name||''),[category,setCategory]=useState(''),[bank,setBank]=useState(banks[0]?.id||''),[paymentDate,setPaymentDate]=useState(today);
+ const [unit,setUnit]=useState(centers[0]?.name||''),[category,setCategory]=useState(''),[bank,setBank]=useState(defaultBankId(banks)||banks[0]?.id||''),[paymentDate,setPaymentDate]=useState(today);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const card=cards.find(c=>c.id===cardId);
  const invoice=entries.filter(e=>e.creditCardId===cardId&&e.invoiceMonth===month);
