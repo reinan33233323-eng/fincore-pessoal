@@ -1,10 +1,14 @@
 # Fincore_Pessoal
 
+Acesso: https://reinan33233323-eng.github.io/fincore-pessoal/
+
+Repositorio: https://github.com/reinan33233323-eng/fincore-pessoal
+
 Instalação independente, baseada no Perino, com identidade preta e cinza, contas bancárias separadas dos centros e sem Notas da equipe ou administração de usuários na interface.
 
-Somente `master@financeiro.com`, com perfil Master, pode entrar. A senha será definida no projeto Supabase próprio. Sessão local com chave exclusiva `fincore-pessoal.auth`.
+Somente `master@financeiro.com`, com perfil Master, pode entrar. A senha é definida diretamente no projeto Supabase próprio. Sessão local com chave exclusiva `fincore-pessoal.auth`.
 
-Sem dados, credenciais ou vínculo com os bancos original e Perino; a aplicação bloqueia essas duas conexões. O banco novo ainda precisa ser identificado e configurado.
+Banco exclusivo: `fincore_pessoal` (`ixujnwupnsggebzisxpp`). A aplicação aceita somente esse projeto. Instalação iniciada sem dados financeiros, com um único Master e novos cadastros desativados.
 
 ## Instalação em projeto novo
 
