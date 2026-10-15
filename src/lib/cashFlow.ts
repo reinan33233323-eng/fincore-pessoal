@@ -2,10 +2,20 @@ import { cashDate, entryValue, type FinancialEntry } from './finance.ts';
 import { addDays } from './recurrence.ts';
 import { addMonthsClamped } from './seriesDates.ts';
 
-type Source = FinancialEntry & { id?: string; description?: string; balanceAdjustment?: boolean; creditCardId?: string | null; invoiceMonth?: string | null };
+type Source = FinancialEntry & { id?: string; description?: string; balanceAdjustment?: boolean; creditCardId?: string | null; invoiceMonth?: string | null; installment?: string };
 export type CashMovement = { description: string; kind: 'receita' | 'despesa'; amount: number; status: 'previsto' | 'realizado'; adjustment: boolean; overdue: boolean };
 export type CashDay = { date: string; opening: number; income: number; expense: number; adjustment: number; pendingIncome: number; pendingExpense: number; closing: number; movements: CashMovement[] };
 export type CashMonth = Omit<CashDay, 'date' | 'movements'> & { month: string; days: CashDay[] };
+
+/** Running cash balance after each movement, including multiple movements on the same day. */
+export function cashMovementRows(month: CashMonth) {
+ let balance=Math.round(month.opening*100);
+ return month.days.flatMap(day=>day.movements.map((movement,index)=>{
+  const signed=Math.round(movement.amount*100)*(movement.kind==='receita'?1:-1);
+  balance+=signed;
+  return {...movement,key:`${day.date}:${index}`,date:day.date,signed:signed/100,balance:balance/100};
+ }));
+}
 
 /** Actual bank cash is the base. Pending entries affect the forecast once, never the actual balance. */
 export function buildCashFlow(entries: Source[], bankIds: string[], cards: {id:string;name:string}[], startMonth: string, count: number, today: string) {
@@ -31,7 +41,7 @@ export function buildCashFlow(entries: Source[], bankIds: string[], cards: {id:s
   // Purchases share one monthly invoice, separated by settlement date/status when necessary.
   const key = entry.creditCardId ? `${entry.creditCardId}:${entry.invoiceMonth}:${entry.status}` : `${index}`;
   const previous = day.get(key);
-  day.set(key,{description:entry.creditCardId ? `Fatura ${cards.find(c=>c.id===entry.creditCardId)?.name || 'do cartão'} · ${entry.invoiceMonth || originalDate.slice(0,7)}` : entry.description || (entry.balanceAdjustment?'Ajuste de saldo':'Lançamento'),
+  day.set(key,{description:entry.creditCardId ? `Fatura ${cards.find(c=>c.id===entry.creditCardId)?.name || 'do cartão'} · ${entry.invoiceMonth || originalDate.slice(0,7)}` : `${entry.description || (entry.balanceAdjustment?'Ajuste de saldo':'Lançamento')}${entry.installment ? ` (${entry.installment})` : ''}`,
    kind:entry.kind,amount:((previous ? cents(previous.amount) : 0)+value)/100,status:entry.status,adjustment:!!entry.balanceAdjustment,overdue:!settled&&originalDate<today});
   buckets.set(date,day);
  });

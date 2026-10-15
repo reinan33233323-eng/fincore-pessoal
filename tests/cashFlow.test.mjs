@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCashFlow } from '../src/lib/cashFlow.ts';
+import { buildCashFlow, cashMovementRows } from '../src/lib/cashFlow.ts';
 const settled=(amount,date='2026-10-15',kind='receita',extra={})=>({kind,status:'realizado',amount,date,bankId:'itau',...extra});
 const pending=(amount,date,kind='despesa',extra={})=>({kind,status:'previsto',amount,date,...extra});
 const build=(entries,start='2026-10',count=3)=>buildCashFlow(entries,['itau'],[{id:'card',name:'Nubank'}],start,count,'2026-10-15');
@@ -52,4 +52,18 @@ test('card purchases appear as one invoice on the due date, and payment never du
 test('daily cents remain exact across leap February and negative projected balances',()=>{
  const flow=buildCashFlow([settled(0.30,'2028-01-01'),pending(0.10,'2028-02-28'),pending(0.30,'2028-02-29')],['itau'],[],'2028-02',2,'2028-02-01');
  assert.equal(flow.months[0].days.length,29);assert.equal(flow.months[0].closing,-0.10);assert.equal(flow.months[1].opening,-0.10);
+});
+
+test('movement ledger shows every transaction and the balance after each one on the same day',()=>{
+ const flow=build([settled(1000,'2026-09-01'),pending(30,'2026-10-20','despesa',{description:'Taxa'}),pending(500,'2026-10-20','receita',{description:'Salário'}),pending(100,'2026-10-21','despesa',{description:'Notebook',installment:'1/24'})]);
+ const rows=cashMovementRows(flow.months[0]);
+ assert.deepEqual(rows.map(r=>[r.date,r.signed,r.balance]),[['2026-10-20',-30,970],['2026-10-20',500,1470],['2026-10-21',-100,1370]]);
+ assert.equal(rows[2].description,'Notebook (1/24)');
+ assert.equal(rows.at(-1).balance,flow.months[0].closing);
+});
+test('movement ledger carries adjusted bank balance and consolidates card purchases into one row',()=>{
+ const flow=build([settled(1000,'2026-09-01'),settled(200,'2026-10-15','despesa',{balanceAdjustment:true}),pending(19.90,'2026-11-23','despesa',{creditCardId:'card',invoiceMonth:'2026-11'}),pending(99,'2026-11-23','despesa',{creditCardId:'card',invoiceMonth:'2026-11'})]);
+ const rows=cashMovementRows(flow.months[1]);
+ assert.equal(rows.length,1);assert.equal(rows[0].amount,118.90);assert.equal(rows[0].balance,681.10);
+ assert.equal(rows[0].balance,flow.months[1].closing);
 });
