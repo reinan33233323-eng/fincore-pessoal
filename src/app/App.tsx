@@ -31,7 +31,7 @@ import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLe
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
-import { adjustmentEntry, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
+import { adjustmentEntry, invoiceDate, invoiceCycle, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
 import { cashDate, cashPosition } from "../lib/finance";
 import { entryValue, summarizeFinancialEntries, summarizeBank, localDateKey, localMonthKey } from "../lib/finance";
 import { snapshotFile, unreadableFileMessage } from "../lib/files";
@@ -1415,6 +1415,10 @@ export function EntryForm({
   const monthlyPreview = !recurrence && !sameMonthInstallments && installments > 1 && date &&
     Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
       ? (cardMode ? cardSchedule({amount:parseMoney(amount),date,recurrence:"nenhuma",installments},cardMode) : monthlyParts(installments, parseMoney(amount), date)) : [];
+  const purchaseInvoiceDue = cardMode && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? (editing && date === (editing.cardPurchaseDate || editing.date)
+      ? editing.date : invoiceDate(date, cardMode, editing?.cardInstallmentOffset || 0)) : "";
+  const purchaseCycle = cardMode && purchaseInvoiceDue ? invoiceCycle(purchaseInvoiceDue.slice(0,7),cardMode) : null;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const v = parseMoney(amount);
@@ -1831,6 +1835,13 @@ export function EntryForm({
                 className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
               />
             </label>
+            {cardMode && purchaseCycle && <div className="rounded-xl bg-brand-50 p-3 text-sm" aria-live="polite">
+              <span className="block text-xs font-bold">Fatura calculada automaticamente</span>
+              <strong className="mt-1 block capitalize">{labelMonth(new Date(`${purchaseInvoiceDue.slice(0,7)}-01T12:00:00`))}</strong>
+              <span className="block">Vencimento: {purchaseInvoiceDue.split('-').reverse().join('/')}</span>
+              <span className="mt-1 block text-xs">Compras de {purchaseCycle.start.split('-').reverse().join('/')} até {addDays(purchaseCycle.closing,-1).split('-').reverse().join('/')}. No dia {cardMode.closing_day}, começa a próxima fatura.</span>
+              {recurrence && <span className="mt-2 block text-xs">Cada cobrança da assinatura entra na fatura correspondente à sua própria data, com o valor fixo informado.</span>}
+            </div>}
             {!cardMode && <label className="text-xs font-bold">
               Situação
               <select

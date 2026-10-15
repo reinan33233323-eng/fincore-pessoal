@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { invoiceDate, invoiceCycle, invoiceMonthSummary } from '../src/lib/credit.ts';
 import { cardSchedule, cardInvoices } from '../src/lib/cardLedger.ts';
 const card={id:'nubank',name:'Nubank',closing_day:15,due_day:23};
+test('October 29 subscription belongs to November invoice and repeats by billing month',()=>{
+ assert.equal(invoiceDate('2026-10-15',card),'2026-11-23');
+ assert.equal(invoiceDate('2026-10-29',card),'2026-11-23');
+ const rows=cardSchedule({amount:119.35,date:'2026-10-29',installments:1,recurrence:'mensal',description:'Claude'},card);
+ assert.equal(rows[0].cardPurchaseDate,'2026-10-29');
+ assert.equal(rows[0].invoiceMonth,'2026-11');
+ assert.equal(rows[0].date,'2026-11-23');
+ assert.equal(rows[1].cardPurchaseDate,'2026-11-29');
+ assert.equal(rows[1].date,'2026-12-23');
+ assert.equal(invoiceMonthSummary(rows,card.id,'2026-11').total,119.35);
+ assert.equal(cardInvoices(rows,[card])[0].date,'2026-11-23');
+});
 test('closing on 15 starts next cycle, due on 23 after its closing',()=>{
  assert.equal(invoiceDate('2026-11-14',card),'2026-11-23');
  assert.equal(invoiceDate('2026-11-15',card),'2026-12-23');
