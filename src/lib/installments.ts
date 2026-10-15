@@ -1,3 +1,6 @@
+import { addMonthsClamped } from './seriesDates.ts';
+import { installmentAmounts } from './credit.ts';
+
 export const sameMonthParts = (count: number, total: number, baseDate: string) => {
   const safeCount = Math.max(2, Math.floor(count) || 2);
   const totalCents = Math.round(Math.max(0, total || 0) * 100);
@@ -26,3 +29,10 @@ export const sameMonthParts = (count: number, total: number, baseDate: string) =
     };
   });
 };
+
+/** The same schedule is used by the preview and by persisted entries. */
+export function monthlyParts(count: number, total: number, firstDate: string) {
+  return installmentAmounts(total, count).map((amount, index) => ({
+    date: addMonthsClamped(firstDate, index), amount, installment: `${index + 1}/${count}`,
+  }));
+}

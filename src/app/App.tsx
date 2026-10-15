@@ -26,8 +26,7 @@ import {
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/seriesDates";
 import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
 import BanksSection from "./Banks";
-import { sameMonthParts } from "../lib/installments";
-import { installmentAmounts } from "../lib/credit";
+import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
 import { adjustmentEntry, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
 import { cashDate, cashPosition } from "../lib/finance";
@@ -537,6 +536,9 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     [password, setPassword] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const monthlyPreview = !recurrence && !sameMonthInstallments && installments > 1 && date &&
+    Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
+      ? monthlyParts(installments, parseMoney(amount), date) : [];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -1878,7 +1880,7 @@ function EntryForm({
             {!recurrence && !sameMonthInstallments && (!editing || standaloneEdit) && (
               <label className="flex items-center gap-2 text-sm font-bold">
                 <CalendarClock className="h-4 w-4 text-brand-600" />
-                Parcelar em meses
+                Parcelar: uma parcela por mês
                 <input
                   min="1"
                   type="number"
@@ -1932,16 +1934,18 @@ function EntryForm({
                       }
                     }}
                   />
-                  Dividir dentro de cada mês
+                  Dividir em dias do mesmo mês (avançado)
                 </label>
                 <p className="mt-1 text-xs text-brand-700">
-                  Ideal para adiantamento e saldo de salário, ou pagamentos em
-                  2x e 3x no mesmo mês.
+                  Todas as parcelas abaixo vencem no mesmo mês. Para distribuir entre outubro, novembro, dezembro etc., use o parcelamento mensal.
                 </p>
               </div>
             )}
             {sameMonthInstallments && (!editing || standaloneEdit) && (
               <div className="col-span-full space-y-3 rounded-xl bg-white p-3">
+                <button type="button" onClick={() => { setInstallments(sameMonthPartCount); setRecurrence(false); setSameMonthInstallments(false); }} className="w-full rounded-xl bg-brand-700 p-3 text-sm font-bold text-white">
+                  Quero uma parcela por mês ({sameMonthPartCount} meses)
+                </button>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
                     Quantidade de parcelas
@@ -2044,11 +2048,15 @@ function EntryForm({
                 definidos acima.
               </p>
             )}
-            {!recurrence && installments > 1 && (
-              <p className="col-span-full text-xs text-brand-700">
-                Lançamento com fim: {installments} parcelas mensais de{" "}
-                {fmt((parseMoney(amount) || 0) / installments)}.
-              </p>
+            {!recurrence && !sameMonthInstallments && installments > 1 && (
+              <section className="col-span-full rounded-xl border bg-white p-3" aria-label="Prévia das parcelas mensais">
+                <h3 className="text-sm font-extrabold">Uma parcela por mês · {installments} meses</h3>
+                <p className="mt-1 text-xs text-slate-500">O valor total será dividido entre os meses abaixo. A primeira data é a do lançamento; cada parcela seguinte avança um mês.</p>
+                <div className="mt-3 max-h-72 overflow-y-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b"><th className="p-2">Parcela</th><th>Vencimento</th><th className="text-right">Valor</th></tr></thead><tbody>
+                  {monthlyPreview.map(part => <tr key={part.installment} className="border-b"><td className="p-2">{part.installment}</td><td>{part.date.split('-').reverse().join('/')}</td><td className="text-right">{fmt(part.amount)}</td></tr>)}
+                </tbody></table></div>
+                {!monthlyPreview.length && <p className="mt-2 text-xs text-amber-800">Informe valor e data válidos. Cada parcela deve ter pelo menos R$ 0,01.</p>}
+              </section>
             )}
           </div>
         </div>
@@ -3756,7 +3764,7 @@ function App() {
             ? id()
             : undefined,
         count = data.recurrence === "mensal" ? 36 : data.installments;
-      const monthlyAmounts = data.recurrence === "mensal" ? null : installmentAmounts(data.amount, count);
+      const monthlySchedule = data.recurrence === "mensal" ? null : monthlyParts(count, data.amount, data.date);
       const created = Array.from({ length: count }, (_, i) => {
         return {
           ...data,
@@ -3765,13 +3773,13 @@ function App() {
           amount:
             data.recurrence === "mensal"
               ? data.amount
-              : monthlyAmounts![i],
+              : monthlySchedule![i].amount,
           // Limita ao último dia do mês: 31/07 + 2 meses = 30/09 (não 01/10).
-          date: addMonthsClamped(data.date, i),
+          date: monthlySchedule?.[i].date ?? addMonthsClamped(data.date, i),
           status: i === 0 ? data.status : "previsto",
           installments: 1,
           installment:
-            data.installments > 1 ? `${i + 1}/${data.installments}` : undefined,
+            data.installments > 1 ? monthlySchedule![i].installment : undefined,
         };
       });
       await saveRemoteEntries(created);

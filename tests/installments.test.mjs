@@ -19,3 +19,13 @@ test('monthly and card splits accept amounts above former limits with exact tota
   assert.ok(values.every(v=>v>0));
  }
 });
+
+test('monthly preview and saving share a schedule that advances 24 months instead of days', async()=>{
+ const { monthlyParts } = await import('../src/lib/installments.ts');
+ const schedule=monthlyParts(24,7100,'2026-10-15');
+ assert.deepEqual(schedule.slice(0,3).map(p=>p.date),['2026-10-15','2026-11-15','2026-12-15']);
+ assert.equal(schedule[23].date,'2028-09-15');
+ assert.equal(new Set(schedule.map(p=>p.date.slice(0,7))).size,24);
+ assert.equal(schedule.reduce((sum,p)=>sum+Math.round(p.amount*100),0),710000);
+ assert.deepEqual(monthlyParts(3,100,'2027-01-31').map(p=>p.date),['2027-01-31','2027-02-28','2027-03-31']);
+});
