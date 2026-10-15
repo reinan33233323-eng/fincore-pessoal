@@ -4,6 +4,12 @@ import { buildCashFlow, cashMovementRows } from '../src/lib/cashFlow.ts';
 const settled=(amount,date='2026-10-15',kind='receita',extra={})=>({kind,status:'realizado',amount,date,bankId:'itau',...extra});
 const pending=(amount,date,kind='despesa',extra={})=>({kind,status:'previsto',amount,date,...extra});
 const build=(entries,start='2026-10',count=3)=>buildCashFlow(entries,['itau'],[{id:'card',name:'Nubank'}],start,count,'2026-10-15');
+test('month-end summary adds pending net to current bank balance without counting settled amounts twice',()=>{
+ const flow=build([settled(3673.98,'2026-10-15','receita',{balanceAdjustment:true}),settled(1,'2026-10-15','despesa',{balanceAdjustment:true}),pending(3537,'2026-10-30','receita'),pending(229,'2026-10-30')]);
+ assert.equal(flow.actual,3672.98);
+ assert.equal(flow.months[0].closing,6980.98);
+ assert.equal(flow.months[1].opening,6980.98);
+});
 test('bank balances anchor daily forecasts and month closings carry into the next month',()=>{
  const flow=build([settled(1000,'2026-10-01'),pending(200,'2026-10-20'),pending(500,'2026-11-02','receita'),pending(100,'2026-11-10')]);
  assert.equal(flow.actual,1000);

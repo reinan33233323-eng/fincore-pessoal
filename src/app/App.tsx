@@ -28,6 +28,7 @@ import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/ser
 import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
 import BanksSection from "./Banks";
 import CashFlow from "./CashFlow";
+import { buildCashFlow } from "../lib/cashFlow";
 import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
@@ -3605,6 +3606,8 @@ function App() {
         currentUser.role === "master" || currentUser.units.includes(x.unit),
     ),
     invoiceDisplay = cardInvoices(visible,cards),
+    monthCashForecast = buildCashFlow(visible,banks.map(bank=>bank.id),cards,key,1,today),
+    monthCashClosing = monthCashForecast.months[0].closing,
     pending = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date <= today),cards),
     overdue = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date < today),cards),
     overduePay = overdue.filter((x) => x.kind === "despesa"),
@@ -4873,18 +4876,18 @@ function App() {
                   )}
                   {showIncomeTotals && showExpenseTotals && (
                     <div className="rounded-lg bg-white p-3">
-                      <p className="text-xs font-bold text-gray-500">Saldo (receitas − despesas)</p>
+                      <p className="text-xs font-bold text-gray-500">{key < today.slice(0,7) ? "Saldo final do mês" : "Saldo previsto no fim do mês"}</p>
                       <p
                         className={`text-lg font-extrabold ${
-                          listTotals.receita - listTotals.despesa >= 0 ? "text-brand-700" : "text-red-600"
+                          monthCashClosing >= 0 ? "text-brand-700" : "text-red-600"
                         }`}
                       >
-                        {fmt(listTotals.receita - listTotals.despesa)}
+                        {fmt(monthCashClosing)}
                       </p>
                       <p className="text-[11px] text-gray-500">
-                        Realizado <b>{fmt(listDetail.receita.realizado - listDetail.despesa.realizado)}</b> · Previsto{" "}
-                        <b>{fmt(listDetail.receita.previsto - listDetail.despesa.previsto)}</b>
+                        Saldo atual das contas <b>{fmt(monthCashForecast.actual)}</b>.
                       </p>
+                      <p className="mt-1 text-[11px] text-gray-500">{labelMonth(month)} completo, com receitas a receber e despesas a pagar. Valores já realizados não são somados novamente. Projeção independente dos filtros da lista.</p>
                     </div>
                   )}
                 </div>
