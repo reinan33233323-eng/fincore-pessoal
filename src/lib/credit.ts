@@ -18,3 +18,22 @@ export function adjustmentEntry(row: BalanceAdjustment) {
  amount:Math.abs(Number(row.amount)),date:row.date,paidDate:row.date,bankId:row.bank_id,
  unit:'Saldo bancário',account:'Ajuste de saldo',category:'Ajuste de saldo',description:'Ajuste de saldo bancário',beneficiary:'',pix:'',recurrence:'nenhuma' as const,installments:1,notes:row.notes,balanceAdjustment:true};
 }
+
+/** Invoice months are named by their payment due date. Closing starts the next cycle. */
+export function invoiceCycle(month: string, card: Pick<CreditCard,'closing_day'|'due_day'>) {
+ const [year,monthNumber]=month.split('-').map(Number);
+ const dayAt=(offset:number,day:number)=>{
+  const start=new Date(year,monthNumber-1+offset,1);
+  return localDateKey(new Date(start.getFullYear(),start.getMonth(),Math.min(day,new Date(start.getFullYear(),start.getMonth()+1,0).getDate())));
+ };
+ const closingOffset=card.due_day<=card.closing_day?-1:0;
+ return {start:dayAt(closingOffset-1,card.closing_day),closing:dayAt(closingOffset,card.closing_day),due:dayAt(0,card.due_day)};
+}
+
+export function invoiceMonthSummary(entries:any[],cardId:string,month:string) {
+ const items=entries.filter(e=>e.creditCardId===cardId&&e.invoiceMonth===month);
+ const cents=(e:any)=>Math.round((e.amount+(e.status==='realizado'?(e.juros||0)-(e.discount||0):0))*100);
+ const paid=items.filter(e=>e.status==='realizado').reduce((sum,e)=>sum+cents(e),0)/100;
+ const pending=items.filter(e=>e.status==='previsto').reduce((sum,e)=>sum+cents(e),0)/100;
+ return {items,paid,pending,total:Math.round((paid+pending)*100)/100};
+}
