@@ -27,6 +27,7 @@ import {
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/seriesDates";
 import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
 import BanksSection from "./Banks";
+import CashFlow from "./CashFlow";
 import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
@@ -3981,6 +3982,7 @@ function App() {
       { id: "dashboard", text: "Dashboard", Icon: LayoutDashboard },
       { id: "lancamentos", text: "Lançamentos", Icon: ReceiptText },
       { id: "contas", text: "Contas", Icon: Wallet },
+      ...(isMaster ? [{ id: "fluxo", text: "Fluxo de caixa", Icon: TrendingUp }] : []),
       { id: "cartoes", text: "Cartões de crédito", Icon: CreditCard },
       { id: "categorias", text: "Plano de contas", Icon: Tag },
       { id: "contatos", text: "Fornecedores/clientes", Icon: Building2 },
@@ -4056,6 +4058,8 @@ function App() {
               <h1 className="font-extrabold text-[#191918]">
                 {screen === "dashboard"
                   ? "Dashboard Financeiro"
+                  : screen === "fluxo"
+                    ? "Fluxo de caixa"
                   : screen === "cartoes"
                     ? "Cartões de crédito"
                   : screen === "contas"
@@ -4466,6 +4470,8 @@ function App() {
             </>
           ) : screen === "contas" ? (
             <BanksSection banks={banks} ready={banksReady} canManage={isMaster} entries={visible} setBanks={setBanks} onRefresh={refreshPersonal} />
+          ) : screen === "fluxo" && isMaster ? (
+            <CashFlow entries={visible} banks={banks} cards={cards} onRefresh={refreshPersonal} onAccounts={()=>setScreen("contas")} />
           ) : screen === "cartoes" ? (
             <CreditCards key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={entries} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")} onEntries={(invoiceMonth)=>{setMonth(new Date(`${invoiceMonth}-01T12:00:00`));setSearch("");setFilter("Todos");setEntryFilter("todos");setPeriodMode("mes");setCounterpartyFilter("todos");setOverdueKind("todos");setScreen("lancamentos");}}
               renderForm={(purchase,savePurchase,close,card)=><EntryForm kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}
