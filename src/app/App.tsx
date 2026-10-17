@@ -32,6 +32,7 @@ import Transactions from "./Transactions";
 import { buildCashFlow } from "../lib/cashFlow";
 import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
+import { renamedCategoryEntries, categorySelection } from "../lib/categories";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
 import { adjustmentEntry, invoiceDate, invoiceCycle, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
@@ -1412,9 +1413,9 @@ export function EntryForm({
     setContactActiveIndex(-1);
   };
   useEffect(() => {
-    if (!available.some((c) => c.name === category))
-      setCategory(available[0]?.name ?? "");
-  }, [kind, unit, categories]);
+    setCategory(current => categorySelection(current, available,
+      !!editing && editing.unit === unit && editing.kind === kind));
+  }, [kind, unit, categories, editing?.id]);
   const monthlyPreview = !recurrence && !sameMonthInstallments && installments > 1 && date &&
     Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
       ? (cardMode ? cardSchedule({amount:parseMoney(amount),date,recurrence:"nenhuma",installments},cardMode) : monthlyParts(installments, parseMoney(amount), date)) : [];
@@ -1630,6 +1631,9 @@ export function EntryForm({
               <option value="" disabled>
                 Selecione uma categoria
               </option>
+              {category && !available.some(c => c.name === category) && (
+                <option value={category}>{category} (categoria do lançamento)</option>
+              )}
               {available.map((c) => (
                 <option key={c.id}>{c.name}</option>
               ))}
@@ -4674,7 +4678,11 @@ function App() {
           close={() => setEditingCategory(null)}
           save={async (c) => {
             await saveRemoteCategory(c);
+            // The database renames linked entries in the same transaction.
+            // Apply the same change locally so every financial view updates now.
+            setEntries(old => renamedCategoryEntries(old, editingCategory, c));
             setCategories((old) => old.map((x) => (x.id === c.id ? c : x)));
+            setSyncVersion(value => value + 1);
           }}
         />
       )}
