@@ -36,7 +36,7 @@ import { renamedCategoryEntries, categorySelection } from "../lib/categories";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
 import { adjustmentEntry, invoiceDate, invoiceCycle, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
-import { cashDate, cashPosition } from "../lib/finance";
+import { reportingDate, reportingPeriod, cashDate, cashPosition } from "../lib/finance";
 import { entryValue, summarizeFinancialEntries, summarizeBank, localDateKey, localMonthKey } from "../lib/finance";
 import { snapshotFile, unreadableFileMessage } from "../lib/files";
 import {
@@ -2583,7 +2583,7 @@ function Reports({
   const [drill, setDrill] = useState<{ title: string; items: Entry[] } | null>(null);
   const openDrill = (title: string, items: Entry[]) => {
     if (!items.length) return;
-    setDrill({ title, items: [...items].sort((a, b) => b.date.localeCompare(a.date)) });
+    setDrill({ title, items: [...items].sort((a, b) => reportingDate(b).localeCompare(reportingDate(a))) });
   };
   const counterpartyOptions = contacts
     .filter((contact) =>
@@ -2591,11 +2591,9 @@ function Reports({
       (kind === "todos" || contact.kind === kind),
     )
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  const cashEntries = entries.map(entry => ({...entry, date:cashDate(entry)}));
-  const filtered = cashEntries.filter(
+  const cashEntries = entries;
+  const filtered = reportingPeriod(entries, from, to).filter(
     (entry) =>
-      entry.date >= from &&
-      entry.date <= to &&
       (unit === "Todos" || entry.unit === unit) &&
       (account === "Todos" || (entry.bankId || "__unassigned__") === account) &&
       (category === "Todos" || entry.category === category) &&
@@ -2708,7 +2706,7 @@ function Reports({
       cursor.setTime(next.getTime());
     }
     filtered.forEach((entry) => {
-      const bucket = periodBuckets.find((item) => entry.date >= item.start && entry.date <= item.end);
+      const bucket = periodBuckets.find((item) => reportingDate(entry) >= item.start && reportingDate(entry) <= item.end);
       if (!bucket) return;
       const key = entry.kind === "receita"
         ? (entry.status === "realizado" ? "Receitas recebidas" : "Receitas previstas")
@@ -2724,6 +2722,7 @@ function Reports({
     .map(item => ({ ...item, balance: cashPosition(cashEntries.filter(e => (e.bankId || "__unassigned__") === item.id && (unit === "Todos" || e.unit === unit) && (category === "Todos" || e.category === category) && (kind === "todos" || e.kind === kind) && (counterparty === "Todos" || contactIdentity(e.kind,e.unit,e.beneficiary||"") === counterparty)),from,to).closing }));
   return (
     <section className="space-y-5">
+      <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-800">Compras no cartão entram pela data da compra, mesmo quando a fatura vence depois. Compras parceladas somam o valor total no mês da compra; assinaturas entram a cada cobrança. Saldos bancários e vencimentos seguem o fluxo de caixa.</p>
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs font-bold">
@@ -2864,8 +2863,8 @@ function Reports({
       <section className="rounded-2xl bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 className="font-extrabold text-[#191918]">Fluxo financeiro no período</h2>
-            <p className="mt-2 text-xs text-slate-600">Saldo anterior: {fmt(reportPosition.opening)} · Saldo final realizado: {fmt(reportPosition.closing)} · Saldo final previsto: {fmt(reportPosition.projectedClosing)}</p>
+            <h2 className="font-extrabold text-[#191918]">Receitas e consumo no período</h2>
+            <p className="mt-2 text-xs text-slate-600">Caixa por vencimento/pagamento — Saldo anterior: {fmt(reportPosition.opening)} · Saldo final realizado: {fmt(reportPosition.closing)} · Saldo final previsto: {fmt(reportPosition.projectedClosing)}</p>
             <p className="mt-1 text-xs text-slate-400">
               {shortPeriod ? "Visão semanal" : "Visão mensal"} · Passe o mouse nas barras para ver os valores.
             </p>
@@ -2884,10 +2883,10 @@ function Reports({
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(value: number) => new Intl.NumberFormat("pt-BR", { notation: "compact" }).format(value)} />
                   <Tooltip formatter={(value, name) => [fmt(Number(value)), String(name)]} contentStyle={{ borderRadius: 12, borderColor: "#e2e8f0" }} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {incomeVisible && <Bar dataKey="Receitas recebidas" stackId="receita" fill="#059669" radius={[0, 0, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas recebidas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "realizado" && e.date >= b.start && e.date <= b.end)); }} />}
-                  {incomeVisible && <Bar dataKey="Receitas previstas" stackId="receita" fill="#6ee7b7" radius={[3, 3, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas previstas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "previsto" && e.date >= b.start && e.date <= b.end)); }} />}
-                  <Bar dataKey="Despesas pagas" stackId="despesa" fill="#dc2626" radius={[0, 0, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas pagas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "realizado" && e.date >= b.start && e.date <= b.end)); }} />
-                  <Bar dataKey="Despesas previstas" stackId="despesa" fill="#fca5a5" radius={[3, 3, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas previstas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "previsto" && e.date >= b.start && e.date <= b.end)); }} />
+                  {incomeVisible && <Bar dataKey="Receitas recebidas" stackId="receita" fill="#059669" radius={[0, 0, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas recebidas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "realizado" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />}
+                  {incomeVisible && <Bar dataKey="Receitas previstas" stackId="receita" fill="#6ee7b7" radius={[3, 3, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas previstas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "previsto" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />}
+                  <Bar dataKey="Despesas pagas" stackId="despesa" fill="#dc2626" radius={[0, 0, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas pagas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "realizado" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />
+                  <Bar dataKey="Despesas previstas" stackId="despesa" fill="#fca5a5" radius={[3, 3, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas previstas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "previsto" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -3015,7 +3014,7 @@ function Reports({
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-slate-800" title={entry.description}>{entry.description}</p>
-                  <p className="truncate text-xs text-slate-400">{entry.category} · {entry.unit} · {dateLabel(entry.date)}</p>
+                  <p className="truncate text-xs text-slate-400">{entry.category} · {entry.unit} · {dateLabel(reportingDate(entry))}</p>
                   <p className="text-[11px] text-slate-400">{entry.status === "realizado" ? "Pago" : entry.date < todayKey ? "Vencido" : "A pagar"}{entry.installment ? ` · Parcela ${entry.installment}` : entry.recurrence !== "nenhuma" ? ` · Recorrente ${entry.recurrence}` : ""}</p>
                 </div>
                 <b className="shrink-0 text-sm text-red-600">{fmt(entry.amount)}</b>
@@ -3111,7 +3110,7 @@ function Reports({
                       {entry.installment && <span className="font-normal text-slate-400"> ({entry.installment})</span>}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      <b className="text-xs font-extrabold text-slate-800">{dateLabel(entry.date)}</b> · {entry.unit} · {entry.category}
+                      <b className="text-xs font-extrabold text-slate-800">{dateLabel(reportingDate(entry))}</b> · {entry.unit} · {entry.category}
                     </p>
                     {entry.beneficiary?.trim() && (
                       <p className="truncate text-[11px] text-slate-500">
@@ -3617,8 +3616,9 @@ function App() {
     overdue = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date < today),cards),
     overduePay = overdue.filter((x) => x.kind === "despesa"),
     overdueReceive = overdue.filter((x) => x.kind === "receita"),
-    current = visible.filter((x) => cashDate(x).startsWith(key)),
-    currentDisplay = cardInvoices(current,cards),
+    cashCurrent = visible.filter((x) => cashDate(x).startsWith(key)),
+    current = reportingPeriod(visible, `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
+    currentDisplay = cardInvoices(cashCurrent,cards),
     localDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
     todayStr = localDate(new Date()),
@@ -3647,6 +3647,7 @@ function App() {
     payToday = cardInvoices(visible.filter(x=>x.kind === "despesa" && x.status === "previsto" && x.date === todayStr),cards),
     payTodayTotal = payToday.reduce((s, x) => s + x.amount, 0),
     totals = summarizeFinancialEntries(current),
+    cashTotals = summarizeFinancialEntries(cashCurrent),
     position = cashPosition(visible, `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
     move = (n: number) =>
       setMonth((v) => new Date(v.getFullYear(), v.getMonth() + n, 1)),
@@ -4151,7 +4152,7 @@ function App() {
                 </div>
                 <div className="flex flex-wrap items-center gap-3"><Month value={month} move={move} /><button type="button" disabled={refreshing} onClick={() => setSyncVersion(value => value + 1)} className="rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 disabled:opacity-50">{refreshing ? "Atualizando…" : "Atualizar dados"}</button></div>
               </div>
-              <p className={`mb-4 text-xs ${syncError ? "font-bold text-red-600" : "text-slate-500"}`}>{syncError ? "Não foi possível atualizar os dados. Clique em Atualizar dados para tentar novamente." : lastSync ? `Dados atualizados às ${lastSync}. Realizados por data de pagamento; previstos por vencimento. Atrasos consideram todos os meses.` : "Carregando atualização dos dados…"}</p>
+              <p className={`mb-4 text-xs ${syncError ? "font-bold text-red-600" : "text-slate-500"}`}>{syncError ? "Não foi possível atualizar os dados. Clique em Atualizar dados para tentar novamente." : lastSync ? `Dados atualizados às ${lastSync}. Compras no cartão por data da compra. Contas a pagar, saldos e atrasos por vencimento/pagamento.` : "Carregando atualização dos dados…"}</p>
               {pending.length > 0 && (
                 <section className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   <b>⚠ Pendências de vencimento: {pending.length}</b>
@@ -4167,10 +4168,10 @@ function App() {
               <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {([
                   { title: "A pagar hoje", value: payTodayTotal, Icon: CalendarClock, style: "text-orange-600 bg-orange-50", filter: "pagar", today: true },
-                  { title: "Receitas recebidas", value: totals.income, Icon: TrendingUp, style: "text-emerald-600 bg-emerald-50", filter: "recebidas", today: false },
-                  { title: "Despesas pagas", value: totals.expense, Icon: TrendingDown, style: "text-red-600 bg-red-50", filter: "pagas", today: false },
-                  { title: "A pagar", value: totals.pay, Icon: CreditCard, style: "text-orange-600 bg-orange-50", filter: "pagar", today: false },
-                  { title: "A receber", value: totals.receive, Icon: Wallet, style: "text-brand-600 bg-brand-50", filter: "receber", today: false },
+                  { title: "Receitas recebidas", value: cashTotals.income, Icon: TrendingUp, style: "text-emerald-600 bg-emerald-50", filter: "recebidas", today: false },
+                  { title: "Despesas pagas", value: cashTotals.expense, Icon: TrendingDown, style: "text-red-600 bg-red-50", filter: "pagas", today: false },
+                  { title: "A pagar", value: cashTotals.pay, Icon: CreditCard, style: "text-orange-600 bg-orange-50", filter: "pagar", today: false },
+                  { title: "A receber", value: cashTotals.receive, Icon: Wallet, style: "text-brand-600 bg-brand-50", filter: "receber", today: false },
                 ] as const)
                   .filter((card) => isMaster || (card.filter !== "recebidas" && card.filter !== "receber"))
                   .map(({ title, value, Icon: CardIcon, style, filter: targetFilter, today: isToday }) => {
@@ -4266,8 +4267,8 @@ function App() {
                 </div>
               </section>
               <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
-                <h2 className="font-extrabold text-[#191918]">Resumo dos lançamentos do mês</h2>
-                <p className="mt-1 text-xs text-slate-500">{currentDisplay.length} lançamento(s). Realizados por pagamento e previstos por vencimento. Os previstos entram em A pagar / A receber; os realizados em Pagas / Recebidas.</p>
+                <h2 className="font-extrabold text-[#191918]">Receitas e consumo do mês</h2>
+                <p className="mt-1 text-xs text-slate-500">Compras no cartão pela data da compra, incluindo o valor total das compras parceladas. Assinaturas entram no mês de cada cobrança. Os saldos abaixo seguem o fluxo de caixa.</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {isMaster && <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Receitas totais do mês</p><b className="text-xl text-emerald-700">{fmt(totals.totalIncome)}</b></div>}
                   <div className="rounded-xl bg-red-50 p-4"><p className="text-xs font-bold text-red-800">Despesas totais do mês</p><b className="text-xl text-red-700">{fmt(totals.totalExpense)}</b></div>
@@ -4276,7 +4277,7 @@ function App() {
               </section>
               {isMaster && <section className="mt-5 grid gap-3 sm:grid-cols-3" aria-label="Posição de caixa mensal">
                 {[['Saldo anterior ao mês', position.opening], ['Saldo final realizado do mês', position.closing], ['Saldo final previsto do mês', position.projectedClosing]].map(([title,value]) => <div key={String(title)} className="rounded-2xl bg-white p-5 shadow-sm"><p className="text-xs font-bold text-slate-500">{title}</p><b className="mt-2 block text-xl">{fmt(Number(value))}</b></div>)}
-                <p className="text-xs text-slate-500 sm:col-span-3">Inclui ajustes de saldo. Resultado das movimentações do mês: {fmt(totals.balance)}. O saldo anterior é transportado entre meses.</p>
+                <p className="text-xs text-slate-500 sm:col-span-3">Inclui ajustes de saldo. Resultado das movimentações de caixa do mês: {fmt(cashTotals.balance)}. O saldo anterior é transportado entre meses.</p>
               </section>}
               {isMaster && <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3"><div><h2 className="font-extrabold text-[#191918]">Contas bancárias</h2><p className="text-xs text-slate-500">Saldo atual com ajustes e pagamentos de faturas. Previstos não alteram o saldo.</p></div><button onClick={() => setScreen("contas")} className="rounded-xl border border-brand-200 px-3 py-2 text-xs font-bold text-brand-700">Gerenciar contas</button></div>

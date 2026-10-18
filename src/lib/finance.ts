@@ -4,6 +4,8 @@ export type FinancialEntry = {
   amount: number;
   date: string;
   bankId?: string | null;
+  creditCardId?: string | null;
+  cardPurchaseDate?: string | null;
   paidDate?: string | null;
   juros?: number;
   discount?: number;
@@ -46,4 +48,14 @@ export function cashPosition(entries: FinancialEntry[], from: string, to: string
  const period = summarizeFinancialEntries(entries.filter(e => cashDate(e)>=from && cashDate(e)<=to));
  return {opening, closing:Math.round((opening+period.balance)*100)/100,
  projectedClosing:Math.round((opening+period.projectedBalance)*100)/100};
+}
+
+// Consumption belongs to the purchase month, regardless of the invoice/payment.
+// Installment rows share their original purchase date; together they represent
+// that purchase's full value. Subscriptions have their own date each month.
+export const reportingDate = (entry: FinancialEntry) =>
+  entry.creditCardId && entry.cardPurchaseDate ? entry.cardPurchaseDate : cashDate(entry);
+
+export function reportingPeriod<T extends FinancialEntry>(entries: T[], from: string, to: string): T[] {
+  return entries.filter(entry => reportingDate(entry) >= from && reportingDate(entry) <= to);
 }
