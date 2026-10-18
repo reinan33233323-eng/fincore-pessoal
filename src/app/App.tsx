@@ -2722,7 +2722,7 @@ function Reports({
     .map(item => ({ ...item, balance: cashPosition(cashEntries.filter(e => (e.bankId || "__unassigned__") === item.id && (unit === "Todos" || e.unit === unit) && (category === "Todos" || e.category === category) && (kind === "todos" || e.kind === kind) && (counterparty === "Todos" || contactIdentity(e.kind,e.unit,e.beneficiary||"") === counterparty)),from,to).closing }));
   return (
     <section className="space-y-5">
-      <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-800">Compras no cartão entram pela data da compra, mesmo quando a fatura vence depois. Compras parceladas somam o valor total no mês da compra; assinaturas entram a cada cobrança. Saldos bancários e vencimentos seguem o fluxo de caixa.</p>
+      <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-800">Compras no cartão entram pela data da compra, mesmo quando a fatura vence depois. Compras parceladas entram uma parcela por mês, a partir da data da compra; assinaturas entram a cada cobrança. Saldos bancários e vencimentos seguem o fluxo de caixa.</p>
       <div className="rounded-2xl bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs font-bold">
@@ -4268,7 +4268,7 @@ function App() {
               </section>
               <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
                 <h2 className="font-extrabold text-[#191918]">Receitas e consumo do mês</h2>
-                <p className="mt-1 text-xs text-slate-500">Compras no cartão pela data da compra, incluindo o valor total das compras parceladas. Assinaturas entram no mês de cada cobrança. Os saldos abaixo seguem o fluxo de caixa.</p>
+                <p className="mt-1 text-xs text-slate-500">Compras no cartão pela data da compra; parcelamentos entram uma parcela por mês, a partir dessa data. Assinaturas entram no mês de cada cobrança. Os saldos abaixo seguem o fluxo de caixa.</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {isMaster && <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Receitas totais do mês</p><b className="text-xl text-emerald-700">{fmt(totals.totalIncome)}</b></div>}
                   <div className="rounded-xl bg-red-50 p-4"><p className="text-xs font-bold text-red-800">Despesas totais do mês</p><b className="text-xl text-red-700">{fmt(totals.totalExpense)}</b></div>

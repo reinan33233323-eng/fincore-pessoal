@@ -28,15 +28,42 @@ test('a subscription contributes one charge per purchase month and its invoice r
  assert.equal(cardInvoices(rows,[card]).find(e=>e.invoiceMonth==='2026-11').amount,19.90);
 });
 
-test('installments count the full purchase exactly once in its purchase month, preserving later invoices',()=>{
+test('installments contribute only their monthly amount and retain every cent across all months',()=>{
  const rows=cardSchedule({date:'2026-10-18',amount:1000.01,recurrence:'nenhuma',installments:24},card);
  const before=structuredClone(rows);
- assert.equal(summarizeFinancialEntries(period(rows,'2026-10')).totalExpense,1000.01);
- assert.equal(period(rows,'2026-11').length,0);
+ const allocated=[];
+ for(let i=0;i<24;i++) {
+  const month=reportingDate(rows[i]).slice(0,7);
+  const selected=period(rows,month);
+  assert.equal(selected.length,1);
+  assert.equal(selected[0],rows[i]);
+  allocated.push(...selected);
+ }
+ assert.equal(summarizeFinancialEntries(allocated).totalExpense,1000.01);
+ assert.equal(summarizeFinancialEntries(period(rows,'2026-10')).totalExpense,41.67);
  assert.equal(cardInvoices(rows,[card]).length,24);
  assert.equal(new Set(rows.map(e=>e.date)).size,24);
  assert.equal(summarizeBank(rows,'itau').balance,0);
  assert.deepEqual(rows,before);
+});
+
+test('1230 bike in ten installments counts 123 in October, 123 in November, independently of its card cycle',()=>{
+ for(const selectedCard of [card,card2]) {
+  const rows=cardSchedule({date:'2026-10-15',amount:1230,recurrence:'nenhuma',installments:10},selectedCard);
+  for(const month of ['2026-10','2026-11','2026-12','2027-07']) {
+   assert.equal(summarizeFinancialEntries(period(rows,month)).totalExpense,123);
+  }
+  assert.equal(period(rows,'2027-08').length,0);
+  assert.equal(rows[0].date.startsWith('2026-11'),true);
+ }
+});
+
+test('allocation clamps short months and preserves explicitly same-month split parts',()=>{
+ const base={kind:'despesa',status:'previsto',amount:100,date:'2027-03-23',creditCardId:'card',cardPurchaseDate:'2027-01-31'};
+ assert.equal(reportingDate({...base,cardInstallmentOffset:1}),'2027-02-28');
+ assert.equal(reportingDate({...base,cardInstallmentOffset:2}),'2027-03-31');
+ assert.equal(reportingDate({...base,installment:'2/10'}),'2027-02-28');
+ assert.equal(reportingDate({...base,installment:'2/3',cardInstallmentOffset:0}),'2027-01-31');
 });
 
 test('ordinary transactions retain their existing dates and legacy card entries safely use their available date',()=>{

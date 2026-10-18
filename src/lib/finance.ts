@@ -1,3 +1,5 @@
+import { addMonthsClamped } from './seriesDates.ts';
+
 export type FinancialEntry = {
   kind: 'receita' | 'despesa';
   status: 'previsto' | 'realizado';
@@ -6,6 +8,8 @@ export type FinancialEntry = {
   bankId?: string | null;
   creditCardId?: string | null;
   cardPurchaseDate?: string | null;
+  cardInstallmentOffset?: number | null;
+  installment?: string | null;
   paidDate?: string | null;
   juros?: number;
   discount?: number;
@@ -50,11 +54,16 @@ export function cashPosition(entries: FinancialEntry[], from: string, to: string
  projectedClosing:Math.round((opening+period.projectedBalance)*100)/100};
 }
 
-// Consumption belongs to the purchase month, regardless of the invoice/payment.
-// Installment rows share their original purchase date; together they represent
-// that purchase's full value. Subscriptions have their own date each month.
-export const reportingDate = (entry: FinancialEntry) =>
-  entry.creditCardId && entry.cardPurchaseDate ? entry.cardPurchaseDate : cashDate(entry);
+// Each installment belongs to its month from the purchase date. The invoice
+// closing and payment dates never shift this monthly spending allocation.
+export function reportingDate(entry: FinancialEntry): string {
+  if (!entry.creditCardId || !entry.cardPurchaseDate) return cashDate(entry);
+  const storedOffset = entry.cardInstallmentOffset;
+  const label = /^(\d+)\/\d+$/.exec(entry.installment || '');
+  const offset = storedOffset != null && Number.isInteger(storedOffset) && storedOffset >= 0
+    ? storedOffset : label ? Math.max(0, Number(label[1]) - 1) : 0;
+  return addMonthsClamped(entry.cardPurchaseDate, offset);
+}
 
 export function reportingPeriod<T extends FinancialEntry>(entries: T[], from: string, to: string): T[] {
   return entries.filter(entry => reportingDate(entry) >= from && reportingDate(entry) <= to);
