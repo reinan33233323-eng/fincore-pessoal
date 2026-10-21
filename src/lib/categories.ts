@@ -10,8 +10,8 @@ export function renamedCategoryEntries<T extends { category: string; unit: strin
       ? { ...entry, category: next.name } : entry);
 }
 
-/** Never silently reclassify an existing entry, including legacy category names. */
+/** Require an explicit category for new entries; preserve existing classifications. */
 export function categorySelection(current: string, available: { name: string }[], preserve: boolean): string {
   if (current && (preserve || available.some(category => category.name === current))) return current;
-  return available[0]?.name ?? "";
+  return "";
 }

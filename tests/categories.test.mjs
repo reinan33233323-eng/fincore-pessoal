@@ -24,6 +24,15 @@ test('opening an existing entry never falls back to the first category when its 
  assert.equal(categorySelection('Alimentação',available,true),'Alimentação');
  assert.equal(categorySelection('Restaurantes',available,true),'Restaurantes');
  assert.equal(categorySelection('Alimentação',[],true),'Alimentação');
- assert.equal(categorySelection('',available,false),'Comida japonesa');
- assert.equal(categorySelection('Outra unidade',available,false),'Comida japonesa');
+});
+
+test('new entries start blank and changing scope clears an unavailable category',()=>{
+ const expenses=[{name:'Comida japonesa'},{name:'Restaurantes'}];
+ const income=[{name:'Salário'}];
+ assert.equal(categorySelection('',expenses,false),'');
+ assert.equal(categorySelection('',income,false),'');
+ assert.equal(categorySelection('',[],false),'');
+ assert.equal(categorySelection('Restaurantes',expenses,false),'Restaurantes');
+ assert.equal(categorySelection('Restaurantes',income,false),'');
+ assert.equal(categorySelection('Outra unidade',expenses,false),'');
 });
