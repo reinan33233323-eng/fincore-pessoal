@@ -71,7 +71,11 @@ export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPl
     pendingSave.current={key,rows};
    }
   }
-  await saveCardPurchases(rows);await onRefresh();pendingSave.current=null;selectMonth(rows[0].invoiceMonth);setCategory('Todas');setSearch('');setMessage('Lançamentos salvos no cartão. A lista geral mostra o total da fatura.');
+  await saveCardPurchases(rows);await onRefresh();pendingSave.current=null;
+  // Series rows arrive newest first. Editing must keep the invoice and filters
+  // the user opened, rather than navigate to the last generated occurrence.
+  if(!editingPurchase){selectMonth(rows[0].invoiceMonth);setSearch('');}
+  setMessage('Lançamentos salvos no cartão. A lista geral mostra o total da fatura.');
  };
  const pay=()=>void run(async()=>{
  if(!card||!bank||!unpaid.length)throw new Error('Selecione uma fatura em aberto e a conta bancária.');
