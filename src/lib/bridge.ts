@@ -323,6 +323,12 @@ export async function saveCreditCard(card: import('./credit').CreditCard) {
 export async function payCreditInvoice(cardId:string, month:string, bankId:string, date:string) {
  return withFreshSession(() => supabase.rpc('pay_personal_card_invoice',{target_card:cardId,target_month:month,target_bank:bankId,payment_date:date}));
 }
+export async function addCardPartialPayment(cardId:string, month:string, bankId:string, amount:number, date:string) {
+ return withFreshSession(() => supabase.rpc('add_personal_card_partial_payment',{target_card:cardId,target_month:month,target_bank:bankId,payment_amount:amount,payment_date:date}));
+}
+export async function deleteCardPartialPayment(id:string) {
+ return withFreshSession(() => supabase.rpc('delete_personal_card_partial_payment',{target_id:id}));
+}
 export async function setBankBalance(bankId:string, balance:number, date:string) {
  return withFreshSession(() => supabase.rpc('set_personal_bank_balance',{target_bank:bankId,desired_balance:balance,effective_date:date}));
 }

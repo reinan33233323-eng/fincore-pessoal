@@ -19,6 +19,7 @@ import {
   deleteRemoteCategory,
   deleteRemoteEntries,
   deleteRemoteEntrySeries,
+  deleteCardPartialPayment,
   saveRemoteCategory,
   saveRemoteCounterparty,
   saveRemoteEntries,
@@ -38,7 +39,7 @@ import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib
 import { renamedCategoryEntries, categorySelection } from "../lib/categories";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
-import { adjustmentEntry, invoiceDate, invoiceCycle, type BalanceAdjustment, type CreditCard as PersonalCreditCard } from "../lib/credit";
+import { adjustmentEntry, cardPaymentEntries, invoiceDate, invoiceCycle, type BalanceAdjustment, type CardPayment, type CreditCard as PersonalCreditCard } from "../lib/credit";
 import { reportingDate, reportingPeriod, cashDate, cashPosition } from "../lib/finance";
 import { entryValue, summarizeFinancialEntries, summarizeBank, localDateKey, localMonthKey } from "../lib/finance";
 import { snapshotFile, unreadableFileMessage } from "../lib/files";
@@ -125,8 +126,16 @@ type Entry = {
   invoiceUnits?: string[];
   invoiceMonth?: string | null;
   balanceAdjustment?: boolean;
+  /** Partial invoice payment rows (see cardPaymentEntries). */
+  cardPayment?: boolean;
+  cardPaymentId?: string;
+  paysCardId?: string;
+  paysInvoiceMonth?: string;
 };
 // Busca sem diferenciar acentos nem maiúsculas ("divida" acha "Dívida").
+// Partial invoice payments; an older database without the table simply has none.
+const readCardPayments = () =>
+  readAuthenticatedRows<CardPayment>("card_invoice_payments", "paid_date.asc").catch(() => [] as CardPayment[]);
 const normalizeSearch = (text: string) =>
   text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
 // Valor que efetivamente saiu/entrou: numa despesa já paga, soma os juros e
@@ -1272,7 +1281,10 @@ export function EntryForm({
   scope: initialScope,
   close,
   save,
+  onDelete,
 }: {
+  /** Shown only when editing: deletes this entry (and offers the whole series). */
+  onDelete?: () => void;
   cardMode?: PersonalCreditCard;
   onNewCategory?: () => void;
   onNewCenter?: () => void;
@@ -2136,17 +2148,28 @@ export function EntryForm({
             )}
           </div>
         </div>
-        <footer className="relative flex gap-3 border-t bg-zinc-50 px-6 py-4">
+        <footer className="relative flex flex-wrap gap-3 border-t border-zinc-100 bg-zinc-50/70 px-6 py-4">
+          {editing && onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              title={editing.seriesId ? "Excluir este lançamento ou a série inteira" : "Excluir lançamento"}
+              className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              {editing.seriesId ? "Excluir…" : "Excluir"}
+            </button>
+          )}
           <button
             type="button"
             onClick={close}
-            className="flex-1 rounded-xl border py-2.5 text-sm font-bold"
+            className="flex-1 rounded-full bg-white py-2.5 text-sm font-medium ring-1 ring-zinc-200 hover:bg-zinc-100"
           >
             Cancelar
           </button>
           <button
             disabled={saving}
-            className="flex-1 rounded-xl bg-brand-700 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+            className="flex-1 rounded-full bg-[#191918] py-2.5 text-sm font-medium text-white shadow-[0_10px_24px_-12px_rgba(24,24,27,0.9)] hover:bg-black disabled:opacity-60"
           >
             {saving ? "Salvando no banco..." : "Salvar"}
           </button>
@@ -2278,7 +2301,7 @@ function Entries({
                   <Pencil className="h-4 w-4" />
                 </button>
                 {!x.balanceAdjustment && !x.creditCardId && (
-                  <button onClick={() => { if (x.seriesId || window.confirm(`Excluir o lançamento “${x.description}”?`)) remove(x); }} title="Excluir" aria-label={`Excluir ${x.description}`} className="rounded-full p-2 text-zinc-300 hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100">
+                  <button onClick={() => { if (x.seriesId || x.cardPayment || window.confirm(`Excluir o lançamento “${x.description}”?`)) remove(x); }} title="Excluir" aria-label={`Excluir ${x.description}`} className="rounded-full p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 )}
@@ -3241,6 +3264,7 @@ function App() {
     [cards, setCards] = useState<PersonalCreditCard[]>([]),
     [cardFocus, setCardFocus] = useState<{cardId:string;month:string}|null>(null),
     [adjustments, setAdjustments] = useState<BalanceAdjustment[]>([]),
+    [cardPayments, setCardPayments] = useState<CardPayment[]>([]),
     [categories, setCategories] = useState<Category[]>([]),
     [centers, setCenters] = useState<CostCenter[]>([]),
     [centerTableReady, setCenterTableReady] = useState(false),
@@ -3419,7 +3443,8 @@ function App() {
           }
         }
         if (!active) return;
-        setCards(cardRows); setAdjustments(adjustmentRows);
+        setCards(cardRows); setAdjustments(adjustmentRows); setCardPayments(await readCardPayments());
+        if (!active) return;
         setEntries(entriesToShow);
         setSavedContacts(contactRows);
         setContactsTableReady(contactTableAvailable);
@@ -3469,6 +3494,8 @@ function App() {
           creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset,
         })) as Entry[]);
         setCards(cardRows); setAdjustments(adjustmentRows);
+        const paymentRows = await readCardPayments();
+        if (!cancelled) setCardPayments(paymentRows);
         setCategories(categoryRows);
         if (centerRows) setCenters(centerRows.map(costCenterVisual));
         if (bankRows) setBanks(bankRows);
@@ -3648,7 +3675,7 @@ function App() {
       : centers.filter((unit) => currentUser.units.includes(unit.name));
   const key = localMonthKey(month),
     today = localDateKey(new Date()),
-    visible: Entry[] = [...entries, ...adjustments.map(adjustmentEntry)].filter(
+    visible: Entry[] = [...entries, ...adjustments.map(adjustmentEntry), ...cardPaymentEntries(cardPayments, cards)].filter(
       (x) =>
         currentUser.role === "master" || currentUser.units.includes(x.unit),
     ),
@@ -3660,7 +3687,8 @@ function App() {
     overduePay = overdue.filter((x) => x.kind === "despesa"),
     overdueReceive = overdue.filter((x) => x.kind === "receita"),
     cashCurrent = visible.filter((x) => cashDate(x).startsWith(key)),
-    current = reportingPeriod(visible, `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
+    // Partial invoice payments are transfers to the card, not spending.
+    current = reportingPeriod(visible.filter((x) => !x.cardPayment), `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
     currentDisplay = cardInvoices(cashCurrent,cards),
     localDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
@@ -3727,12 +3755,18 @@ function App() {
       setScreen("lancamentos");
     };
   const openFinancialEntry = (entry:Entry) => {
-    if(entry.creditCardId){setCardFocus({cardId:entry.creditCardId,month:entry.invoiceMonth||entry.date.slice(0,7)});setScreen("cartoes");}
+    if(entry.cardPayment){setCardFocus({cardId:entry.paysCardId||"",month:entry.paysInvoiceMonth||entry.date.slice(0,7)});setScreen("cartoes");}
+    else if(entry.creditCardId){setCardFocus({cardId:entry.creditCardId,month:entry.invoiceMonth||entry.date.slice(0,7)});setScreen("cartoes");}
     else if(entry.balanceAdjustment)setScreen("contas");
+  };
+  const removeCardPayment = async (x: Entry) => {
+    if (!x.cardPaymentId || !window.confirm(`Excluir “${x.description}”? O valor volta para o saldo da conta.`)) return;
+    await deleteCardPartialPayment(x.cardPaymentId);
+    await refreshPersonal();
   };
   const quickEdit = (x: Entry) => {
     setDashDrill(null);
-    if (x.balanceAdjustment || x.creditCardId) { openFinancialEntry(x); return; }
+    if (x.balanceAdjustment || x.creditCardId || x.cardPayment) { openFinancialEntry(x); return; }
     setEditScope("one");
     setEditing(x);
     setModal(x.kind);
@@ -3751,6 +3785,7 @@ function App() {
     setEntries(rows.map(row => ({...row, amount:Number(row.amount), juros:Number(row.juros||0), discount:Number(row.discount||0),
       paidDate:row.paid_date, bankId:row.bank_id, seriesId:row.series_id, creditCardId:row.credit_card_id, invoiceMonth:row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset})));
     setAdjustments(adjustmentRows); setBanks(bankRows); setCards(cardRows);
+    setCardPayments(await readCardPayments());
     setSyncVersion(v=>v+1);
   };
   const refreshContacts = async () => {
@@ -3901,7 +3936,7 @@ function App() {
       void refreshContacts();
     },
     settle = async (x: Entry) => {
-      if (x.balanceAdjustment || x.creditCardId) { openFinancialEntry(x); return; }
+      if (x.balanceAdjustment || x.creditCardId || x.cardPayment) { openFinancialEntry(x); return; }
       const becomingPaid = x.status !== "realizado";
       const updated = {
         ...x,
@@ -4475,19 +4510,19 @@ function App() {
                   categories={categories}
                   banks={banks}
                   settle={settle}
-                  edit={(x) => (x.balanceAdjustment || x.creditCardId) ? openFinancialEntry(x) :
+                  edit={(x) => (x.balanceAdjustment || x.creditCardId || x.cardPayment) ? openFinancialEntry(x) :
                     x.seriesId
                       ? setScopeDialog({ entry: x, action: "editar" })
                       : (setEditScope("one"), setEditing(x), setModal(x.kind))
                   }
                   open={(x) => {
-                    if (x.balanceAdjustment || x.creditCardId) { openFinancialEntry(x); return; }
+                    if (x.balanceAdjustment || x.creditCardId || x.cardPayment) { openFinancialEntry(x); return; }
                     // Atalho: edita só este mês, sem perguntar "Este mês / Toda a série".
                     setEditScope("one");
                     setEditing(x);
                     setModal(x.kind);
                   }}
-                  remove={(x) => (x.balanceAdjustment || x.creditCardId) ? openFinancialEntry(x) :
+                  remove={(x) => x.cardPayment ? void removeCardPayment(x) : (x.balanceAdjustment || x.creditCardId || x.cardPayment) ? openFinancialEntry(x) :
                     x.seriesId
                       ? setScopeDialog({ entry: x, action: "excluir" })
                       : remove(x, "one")
@@ -4500,8 +4535,8 @@ function App() {
           ) : screen === "fluxo" && isMaster ? (
             <CashFlow entries={visible} banks={banks} cards={cards} onRefresh={refreshPersonal} onAccounts={()=>setScreen("contas")} />
           ) : screen === "cartoes" ? (
-            <CreditCards categories={categories} key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={entries} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")} onEntries={(invoiceMonth)=>{setMonth(new Date(`${invoiceMonth}-01T12:00:00`));setSearch("");setFilter("Todos");setEntryFilter("todos");setPeriodMode("mes");setCounterpartyFilter("todos");setOverdueKind("todos");setScreen("lancamentos");}}
-              renderForm={(purchase,savePurchase,close,card)=><EntryForm kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}
+            <CreditCards categories={categories} key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={[...entries, ...cardPaymentEntries(cardPayments, cards)]} payments={cardPayments} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")} onEntries={(invoiceMonth)=>{setMonth(new Date(`${invoiceMonth}-01T12:00:00`));setSearch("");setFilter("Todos");setEntryFilter("todos");setPeriodMode("mes");setCounterpartyFilter("todos");setOverdueKind("todos");setScreen("lancamentos");}}
+              renderForm={(purchase,savePurchase,close,card,onDelete)=><EntryForm onDelete={onDelete} kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}
             />
           ) : screen === "contatos" ? (
             <ContactsScreen
@@ -4674,10 +4709,10 @@ function App() {
               unit={filter} setUnit={setFilter} units={allowedUnits} contact={counterpartyFilter} setContact={setCounterpartyFilter} contacts={counterparties}
               periodMode={periodMode} setPeriodMode={setPeriodMode} periodFrom={periodFrom} setPeriodFrom={setPeriodFrom} periodTo={periodTo} setPeriodTo={setPeriodTo}
               overdueKind={overdueKind} setOverdueKind={setOverdueKind} settle={settle}
-              edit={(x)=>(x.balanceAdjustment||x.creditCardId)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"editar"}):(setEditScope("one"),setEditing(x),setModal(x.kind))}
-              open={(x)=>{if(x.balanceAdjustment||x.creditCardId){openFinancialEntry(x);return;}setEditScope("one");setEditing(x);setModal(x.kind);}}
+              edit={(x)=>(x.balanceAdjustment||x.creditCardId||x.cardPayment)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"editar"}):(setEditScope("one"),setEditing(x),setModal(x.kind))}
+              open={(x)=>{if(x.balanceAdjustment||x.creditCardId||x.cardPayment){openFinancialEntry(x);return;}setEditScope("one");setEditing(x);setModal(x.kind);}}
               editCategory={canCreatePlans?setEditingCategory:undefined}
-              remove={(x)=>(x.balanceAdjustment||x.creditCardId)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"excluir"}):remove(x,"one")}
+              remove={(x)=>x.cardPayment?removeCardPayment(x):(x.balanceAdjustment||x.creditCardId||x.cardPayment)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"excluir"}):remove(x,"one")}
             />
           )}
         </div>
@@ -4715,6 +4750,13 @@ function App() {
             setEditing(null);
           }}
           save={save}
+          onDelete={editing && !editing.balanceAdjustment && !editing.creditCardId ? () => {
+            const target = editing;
+            setModal(null);
+            setEditing(null);
+            if (target.seriesId) setScopeDialog({ entry: target, action: "excluir" });
+            else if (window.confirm(`Excluir o lançamento “${target.description}”?`)) void remove(target, "one");
+          } : undefined}
         />
       )}{" "}
       {scopeDialog && (

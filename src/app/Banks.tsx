@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { Bank, deleteBank, saveBank, setBankBalance } from "../lib/bridge";
 import { summarizeBank, cashDate, localDateKey, type FinancialEntry } from "../lib/finance";
 import { Money, fmt, spot } from "./shared";
-import BankLogo from "./BankLogo";
+import BankLogo, { BankPicker } from "./BankLogo";
 
 const normalize = (name: string) => name.trim().replace(/\s+/g, " ");
 const sameName = (a: string, b: string) =>
@@ -110,7 +110,7 @@ export default function BanksSection({
 
   return (
     <section>
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.035em] text-[#191918]">Contas bancárias</h2>
           <p className="fc-sub mt-1">
@@ -118,7 +118,7 @@ export default function BanksSection({
           </p>
         </div>
         {canManage && ready && (
-          <form onSubmit={add} className="flex flex-wrap gap-2">
+          <div className="flex max-w-xl flex-col items-end gap-3"><form onSubmit={add} className="flex flex-wrap justify-end gap-2">
             <input
               aria-label="Nome da conta bancária"
               value={name}
@@ -133,7 +133,7 @@ export default function BanksSection({
             >
               <Plus className="h-4 w-4" /> Cadastrar conta bancária
             </button>
-          </form>
+          </form><div className="w-full rounded-2xl bg-white/70 p-3 ring-1 ring-zinc-200/70"><BankPicker name={name} onChange={setName} label="Escolha o banco" /></div></div>
         )}
       </div>
       {!ready && (
@@ -156,6 +156,7 @@ export default function BanksSection({
               <BankLogo name={editingId === bank.id ? editName : bank.name} className="h-12 w-12 text-lg transition-transform duration-300 group-hover:-rotate-6" />
               <div className="min-w-0 flex-1">
                 {editingId === bank.id ? (
+                  <>
                   <input
                     autoFocus
                     value={editName}
@@ -167,6 +168,8 @@ export default function BanksSection({
                     maxLength={80}
                     className="w-full rounded-lg border bg-zinc-50 px-2 py-1 text-sm"
                   />
+                  <div className="mt-3"><BankPicker name={editName} onChange={setEditName} /></div>
+                  </>
                 ) : (
                   <p className="truncate font-semibold text-[#191918]">{bank.name}</p>
                 )}

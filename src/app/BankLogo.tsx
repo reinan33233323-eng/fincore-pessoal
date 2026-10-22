@@ -4,7 +4,7 @@ import { Landmark } from "lucide-react";
 type Brand = { bg: string; fg: string; mark: string; size?: string; weight?: number };
 const brands: [RegExp, Brand][] = [
   [/nu ?bank|^nu\b|roxinho/i, { bg: "#820AD1", fg: "#fff", mark: "nu", size: "0.95em", weight: 700 }],
-  [/ita[uú]/i, { bg: "#EC7000", fg: "#003A8C", mark: "itaú", size: "0.74em", weight: 800 }],
+  [/itau/i, { bg: "#EC7000", fg: "#fff", mark: "itaú", size: "0.8em", weight: 800 }],
   [/bradesco/i, { bg: "#CC092F", fg: "#fff", mark: "b", size: "1em", weight: 800 }],
   [/santander/i, { bg: "#EC0000", fg: "#fff", mark: "S", size: "0.95em", weight: 800 }],
   [/banco do brasil|^bb\b/i, { bg: "#FCF900", fg: "#0038A8", mark: "BB", size: "0.7em", weight: 800 }],
@@ -21,7 +21,46 @@ const brands: [RegExp, Brand][] = [
   [/pagbank|pagseguro/i, { bg: "#1BB99A", fg: "#fff", mark: "pag", size: "0.6em", weight: 800 }],
   [/safra/i, { bg: "#0F2B5B", fg: "#C8A04A", mark: "S", size: "0.95em", weight: 800 }],
 ];
-export const bankBrand = (name = "") => brands.find(([pattern]) => pattern.test(name))?.[1];
+// Accents and case are ignored, so "Itáu", "ITAU" and "Itaú" all match.
+const plain = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+export const bankBrand = (name = "") => brands.find(([pattern]) => pattern.test(plain(name)))?.[1];
+
+// Quick picks shown in the account and card forms.
+export const BANK_CHOICES = ["Nubank", "Itaú", "Bradesco", "Santander", "Banco do Brasil", "Caixa", "Inter", "C6", "BTG", "PicPay", "Mercado Pago", "XP"];
+/** Puts the chosen bank at the start of the name, replacing a previously chosen one. */
+export const withBank = (name: string, bank: string) => {
+  const current = name.trim();
+  const previous = BANK_CHOICES.find((label) => plain(current).startsWith(plain(label)));
+  const rest = previous ? current.slice(previous.length).trim() : current;
+  return rest ? `${bank} ${rest}` : bank;
+};
+
+export function BankPicker({ name, onChange, label = "Banco" }: { name: string; onChange: (name: string) => void; label?: string }) {
+  const chosen = bankBrand(name);
+  return (
+    <div>
+      <p className="mb-2 text-xs font-medium text-zinc-600">{label} <span className="font-normal text-zinc-400">· toque para usar o logo</span></p>
+      <div className="flex flex-wrap gap-1.5">
+        {BANK_CHOICES.map((bank) => {
+          const active = chosen === bankBrand(bank);
+          return (
+            <button
+              key={bank}
+              type="button"
+              title={bank}
+              aria-pressed={active}
+              onClick={() => onChange(withBank(name, bank))}
+              className={`flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[11px] transition ${active ? "bg-[#191918] text-white" : "bg-zinc-50 text-zinc-600 ring-1 ring-zinc-200 hover:bg-white hover:text-[#191918] hover:shadow-sm"}`}
+            >
+              <BankLogo name={bank} className="h-5 w-5 rounded-full text-[8px]" />
+              {bank}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function BankLogo({ name, className = "h-10 w-10 text-base" }: { name?: string; className?: string }) {
   const brand = bankBrand(name);

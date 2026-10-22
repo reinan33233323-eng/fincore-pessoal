@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronRight, CreditCard, Landmark, Search, X } from "lucide-react";
 import { entryValue, reportingDate } from "../lib/finance";
 import { fmt } from "./shared";
-import BankLogo from "./BankLogo";
+import BankLogo, { bankBrand } from "./BankLogo";
 
 type Named = { id: string; name: string };
 type Props = {
@@ -55,7 +55,9 @@ function Ledger({ entries, categories, banks, cards, onOpen, embedded = false, t
   const totalOut = filtered.filter((e) => e.kind === "despesa").reduce((s, e) => s + entryValue(e), 0);
   const totalIn = filtered.filter((e) => e.kind === "receita").reduce((s, e) => s + entryValue(e), 0);
   const filtering = source !== "all" || kind !== "todos" || category !== "all" || !!term;
-  const logo = (key: string, size = "h-8 w-8 text-[11px]") => key.startsWith("card:")
+  const logo = (key: string, size = "h-8 w-8 text-[11px]") => key.startsWith("card:") && bankBrand(sourceName(key))
+    ? <BankLogo name={sourceName(key)} className={`${size} rounded-lg`} />
+    : key.startsWith("card:")
     ? <span className={`flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-violet-800 text-white shadow-[0_6px_14px_-8px_rgba(109,40,217,0.9)] ${size}`}><CreditCard className="h-[50%] w-[50%]" /></span>
     : key.startsWith("bank:") ? <BankLogo name={sourceName(key)} className={`${size} rounded-lg`} />
     : <span className={`flex shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 ${size}`}><Landmark className="h-[45%] w-[45%]" /></span>;
@@ -208,7 +210,9 @@ export default function DailyLedger(props: Props) {
       <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {sources.map((row) => (
           <button key={row.key} type="button" onClick={() => setOpenSource(row.key)} className="fc-lift group flex items-center gap-3 rounded-2xl bg-zinc-50 p-3 text-left ring-1 ring-zinc-100 hover:bg-white hover:shadow-md">
-            {row.key.startsWith("card:")
+            {row.key.startsWith("card:") && bankBrand(name(row.key))
+              ? <BankLogo name={name(row.key)} className="h-10 w-10 text-sm" />
+              : row.key.startsWith("card:")
               ? <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-violet-800 text-white shadow-[0_6px_14px_-8px_rgba(109,40,217,0.9)]"><CreditCard className="h-5 w-5" /></span>
               : row.key.startsWith("bank:") ? <BankLogo name={name(row.key)} className="h-10 w-10 text-sm" />
               : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400"><Landmark className="h-5 w-5" /></span>}
