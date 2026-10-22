@@ -1,8 +1,41 @@
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Utilitários de dinheiro e mês compartilhados entre as telas.
 export const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Animates a money value from its previous number to the new one.
+export function Money({ value, className = "" }: { value: number; className?: string }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    const start = from.current;
+    if (start === value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      from.current = value;
+      setShown(value);
+      return;
+    }
+    const began = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - began) / 700);
+      const eased = 1 - Math.pow(1 - t, 4);
+      const next = start + (value - start) * eased;
+      from.current = next;
+      setShown(t === 1 ? value : next);
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <span className={className}>{fmt(shown)}</span>;
+}
+// Feeds the cursor position to a .fc-spot tile so its glow follows the pointer.
+export const spot = (event: PointerEvent<HTMLElement>) => {
+  const box = event.currentTarget.getBoundingClientRect();
+  event.currentTarget.style.setProperty("--mx", `${event.clientX - box.left}px`);
+  event.currentTarget.style.setProperty("--my", `${event.clientY - box.top}px`);
+};
 export const parseMoney = (value: string) => {
   const raw = value.replace(/R\$\s?/gi, "").replace(/\s/g, "");
   if (!raw) return NaN;
@@ -37,7 +70,7 @@ export function CurrencyInput({
   const display = value && Number.isFinite(parsed) ? moneyInput(parsed) : "";
   return (
     <div className="relative mt-1.5">
-      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-bold text-gray-400">
+      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-bold text-zinc-400">
         R$
       </span>
       <input
@@ -48,7 +81,7 @@ export function CurrencyInput({
           const digits = event.target.value.replace(/\D/g, "");
           onChange(digits ? String(Number(digits) / 100) : "");
         }}
-        className={`w-full rounded-xl border bg-gray-50 p-3 pl-10 text-sm font-normal ${className}`}
+        className={`w-full rounded-xl border bg-zinc-50 p-3 pl-10 text-sm font-normal ${className}`}
         placeholder={placeholder}
       />
     </div>
@@ -61,21 +94,21 @@ export const labelMonth = (d: Date) =>
 
 export function Month({ value, move }: { value: Date; move: (n: number) => void }) {
   return (
-    <div className="flex items-center justify-center gap-3 rounded-xl border bg-gray-50 px-3 py-2.5">
+    <div className="flex items-center justify-center gap-2 rounded-full bg-white p-1 shadow-sm">
       <button
         onClick={() => move(-1)}
-        className="rounded-lg p-1.5 hover:bg-white"
+        className="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-[#191918]"
       >
-        <ChevronLeft className="h-5 w-5" />
+        <ChevronLeft className="h-4 w-4" />
       </button>
-      <span className="min-w-40 text-center text-sm font-extrabold text-[#191918]">
+      <span key={labelMonth(value)} className="fc-screen min-w-36 text-center text-sm font-semibold tracking-[-0.01em] text-[#191918]">
         {labelMonth(value)}
       </span>
       <button
         onClick={() => move(1)}
-        className="rounded-lg p-1.5 hover:bg-white"
+        className="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 hover:text-[#191918]"
       >
-        <ChevronRight className="h-5 w-5" />
+        <ChevronRight className="h-4 w-4" />
       </button>
     </div>
   );

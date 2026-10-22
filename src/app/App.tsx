@@ -25,7 +25,10 @@ import {
   setRemoteCounterpartyArchived,
 } from "../lib/bridge";
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from "../lib/seriesDates";
-import { CurrencyInput, Month, fmt, labelMonth, moneyInput, parseMoney } from "./shared";
+import { CurrencyInput, Money, Month, fmt, labelMonth, moneyInput, parseMoney, spot } from "./shared";
+import { motion } from "motion/react";
+import BankLogo from "./BankLogo";
+import DailyLedger from "./DailyLedger";
 import BanksSection from "./Banks";
 import CashFlow from "./CashFlow";
 import Transactions from "./Transactions";
@@ -39,17 +42,20 @@ import { adjustmentEntry, invoiceDate, invoiceCycle, type BalanceAdjustment, typ
 import { reportingDate, reportingPeriod, cashDate, cashPosition } from "../lib/finance";
 import { entryValue, summarizeFinancialEntries, summarizeBank, localDateKey, localMonthKey } from "../lib/finance";
 import { snapshotFile, unreadableFileMessage } from "../lib/files";
+import { ICON_ACCEPT, imageToIcon } from "../lib/iconImage";
 import {
   AlertTriangle,
   Bell,
   BarChart3,
   Building2,
   CalendarClock,
+  CheckCircle2,
   ChevronRight,
   CreditCard,
   LayoutDashboard,
   Menu,
   Paperclip,
+  Pencil,
   Plus,
   ReceiptText,
   Repeat2,
@@ -57,10 +63,13 @@ import {
   Tag,
   TrendingDown,
   TrendingUp,
+  Trash2,
   Wallet,
   X,
 } from "lucide-react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -176,7 +185,7 @@ const costCenterColors: CostCenterColor[] = [
   { key: "rose", label: "Rosa", swatch: "#e11d48", color: "bg-rose-600", tint: "border-rose-100 bg-rose-50" },
   { key: "fuchsia", label: "Magenta", swatch: "#c026d3", color: "bg-fuchsia-600", tint: "border-fuchsia-100 bg-fuchsia-50" },
   { key: "violet", label: "Violeta", swatch: "#7c3aed", color: "bg-violet-600", tint: "border-violet-100 bg-violet-50" },
-  { key: "slate", label: "Grafite", swatch: "#475569", color: "bg-slate-600", tint: "border-slate-100 bg-slate-50" },
+  { key: "slate", label: "Grafite", swatch: "#475569", color: "bg-zinc-600", tint: "border-zinc-100 bg-zinc-50" },
 ];
 const costCenterColorByKey = new Map(costCenterColors.map((item) => [item.key, item]));
 const resolveCostCenterColor = (key: string | undefined) =>
@@ -445,8 +454,8 @@ function ScopeDialog({
 }) {
   const verb = action === "editar" ? "alterar" : "excluir";
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fc-overlay fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[1.5rem] bg-white p-6 shadow-2xl">
         <div
           className={`mb-4 flex h-11 w-11 items-center justify-center rounded-full ${action === "excluir" ? "bg-red-100 text-red-600" : "bg-brand-100 text-brand-600"}`}
         >
@@ -457,14 +466,14 @@ function ScopeDialog({
             ? "Alterar lançamento recorrente"
             : "Excluir lançamento recorrente"}
         </h2>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-sm text-zinc-500">
           Você quer {verb} somente este lançamento ou todos os lançamentos desta
           série?
         </p>
         <div className="mt-6 grid gap-3">
           <button
             onClick={one}
-            className="rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+            className="rounded-xl border border-zinc-200 px-4 py-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50"
           >
             Somente este lançamento
           </button>
@@ -478,7 +487,7 @@ function ScopeDialog({
           </button>
           <button
             onClick={close}
-            className="py-1 text-sm font-bold text-gray-400"
+            className="py-1 text-sm font-bold text-zinc-400"
           >
             Cancelar
           </button>
@@ -499,19 +508,19 @@ function DeleteCategoryDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fc-overlay fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[1.5rem] bg-white p-6 shadow-2xl">
         <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-red-100 text-xl font-bold text-red-600">
           −
         </div>
         <h2 className="text-lg font-extrabold text-[#191918]">
           Excluir categoria
         </h2>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-sm text-zinc-500">
           Excluir <strong>{category.name}</strong> do centro de custo{" "}
           <strong>{category.unit}</strong>?
         </p>
-        <p className="mt-2 text-xs leading-5 text-gray-400">
+        <p className="mt-2 text-xs leading-5 text-zinc-400">
           Os lançamentos já cadastrados serão preservados. Esta categoria apenas
           deixará de aparecer em novos lançamentos.
         </p>
@@ -522,7 +531,7 @@ function DeleteCategoryDialog({
           <button
             onClick={close}
             disabled={busy}
-            className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            className="flex-1 rounded-xl border border-zinc-200 px-4 py-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
           >
             Cancelar
           </button>
@@ -607,7 +616,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
           <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-500/25 blur-3xl" />
           <div className="absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-brand-500/20 blur-3xl" />
           <div className="relative">
-            <p className="text-2xl font-extrabold tracking-tight text-[#d4d4d4]">fincore<span className="ml-2 text-xs font-semibold uppercase tracking-[.25em]">Pessoal</span></p>
+            <p className="text-2xl font-extrabold tracking-tight text-[#e4e4e7]">fincore<span className="ml-2 text-xs font-semibold uppercase tracking-[.25em]">Pessoal</span></p>
           </div>
           <div className="relative max-w-xl py-12">
             <p className="mb-5 text-xs font-extrabold tracking-[.2em] text-brand-200">
@@ -638,24 +647,24 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
             <h2 className="mt-2 text-3xl font-extrabold">
               Acesse sua operação
             </h2>
-            <p className="mt-3 text-sm leading-relaxed text-gray-500">
+            <p className="mt-3 text-sm leading-relaxed text-zinc-500">
               Entre para acompanhar o que importa no seu negócio.
             </p>
-            <label className="mt-8 block text-xs font-bold text-gray-600">
+            <label className="mt-8 block text-xs font-bold text-zinc-600">
               E-mail
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               />
             </label>
-            <label className="mt-4 block text-xs font-bold text-gray-600">
+            <label className="mt-4 block text-xs font-bold text-zinc-600">
               Senha
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               />
             </label>
             {error && (
@@ -663,11 +672,11 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
             )}
             <button
               disabled={busy}
-              className="mt-6 w-full rounded-xl bg-[#d4d4d4] py-3.5 text-sm font-bold text-[#191918] shadow-lg shadow-brand-700/20 transition hover:bg-[#fafafa] disabled:cursor-wait disabled:opacity-70"
+              className="mt-6 w-full rounded-xl bg-[#191918] py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_-10px_rgba(24,24,27,0.7)] transition hover:bg-black hover:shadow-[0_14px_28px_-10px_rgba(24,24,27,0.8)] disabled:cursor-wait disabled:opacity-70"
             >
               {busy ? "Entrando..." : "Entrar no Fincore"}
             </button>
-            <p className="mt-6 text-center text-xs text-gray-400">
+            <p className="mt-6 text-center text-xs text-zinc-400">
               Acesso protegido e gerenciado pelo administrador.
             </p>
           </form>
@@ -700,15 +709,25 @@ function NewCategory({
     [color, setColor] = useState(category?.color ?? "#3b82f6"),
     [saving, setSaving] = useState(false),
     [saveError, setSaveError] = useState("");
-  const upload = (e: ChangeEvent<HTMLInputElement>) => {
+  const [converting, setConverting] = useState(false);
+  // Any picture becomes a light square icon (see imageToIcon).
+  const upload = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
+    e.target.value = "";
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => setIcon(String(r.result));
-    r.readAsDataURL(f);
+    setSaveError("");
+    setConverting(true);
+    try {
+      setIcon(await imageToIcon(f));
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Não foi possível ler esta imagem.");
+    } finally {
+      setConverting(false);
+    }
   };
+  const photo = icon.startsWith("data:");
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+    <div className="fc-overlay fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] p-4">
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -736,29 +755,34 @@ function NewCategory({
             }
           }
         }}
-        className="w-full max-w-lg rounded-2xl bg-white shadow-2xl"
+        className="w-full max-w-lg overflow-hidden rounded-[1.5rem] bg-white shadow-2xl"
       >
-        <header className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <h2 className="font-extrabold text-[#191918]">
-              {category ? "Editar categoria" : "Nova categoria"}
+        <header className="flex items-center gap-4 border-b border-zinc-100 px-6 py-5">
+          <span
+            className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] text-2xl shadow-md ring-1 ring-black/5"
+            style={{ backgroundColor: color }}
+          >
+            {photo ? <img src={icon} alt="" className="h-full w-full object-cover" /> : icon}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-zinc-500">{category ? "Editar categoria" : "Nova categoria"}</p>
+            <h2 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#191918]">
+              {name.trim() || "Nome da categoria"}
             </h2>
-            <p className="text-xs text-gray-400">
-              Vinculada a apenas um centro de custo.
-            </p>
+            <p className="text-[11px] text-zinc-400">{kind === "receita" ? "Receita" : "Despesa"} · {unit}</p>
           </div>
-          <button type="button" onClick={close}>
-            <X />
+          <button type="button" aria-label="Fechar" onClick={close} className="rounded-full p-2 text-zinc-500 hover:rotate-90 hover:bg-zinc-100 hover:text-[#191918]">
+            <X className="h-5 w-5" />
           </button>
         </header>
         <div className="space-y-4 p-6">
-          <label className="block text-xs font-bold text-gray-600">
+          <label className="block text-xs font-bold text-zinc-600">
             Nome
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+              className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               placeholder="Ex.: Manutenção de máquinas"
             />
           </label>
@@ -768,7 +792,7 @@ function NewCategory({
               <select
                 value={kind}
                 onChange={(e) => setKind(e.target.value as Kind)}
-                className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+                className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               >
                 {allowIncome && <option value="receita">Receita</option>}
                 <option value="despesa">Despesa</option>
@@ -779,7 +803,7 @@ function NewCategory({
               <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value as Unit)}
-                className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+                className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               >
                 {allowedUnits.map((u) => (
                   <option key={u.name}>{u.name}</option>
@@ -789,26 +813,28 @@ function NewCategory({
           </div>
           <div>
             <p className="mb-2 text-xs font-bold">Ícone</p>
+            <label className="mb-3 flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-3 transition hover:border-[#191918] hover:bg-white">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white text-zinc-500 ring-1 ring-zinc-200">
+                {photo ? <img src={icon} alt="" className="h-full w-full object-cover" /> : <Paperclip className="h-4 w-4" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-[#191918]">{converting ? "Preparando imagem…" : photo ? "Trocar imagem" : "Usar uma foto ou logo como ícone"}</span>
+                <span className="block text-[11px] font-normal text-zinc-500">PNG, JPG, WebP, SVG, GIF, AVIF ou HEIC. Logos transparentes ficam inteiros; fotos são recortadas em quadrado.</span>
+              </span>
+              <input type="file" accept={ICON_ACCEPT} onChange={(event) => void upload(event)} disabled={converting} className="hidden" />
+            </label>
             <div className="flex flex-wrap gap-2">
               {icons.map((x) => (
                 <button
                   type="button"
                   onClick={() => setIcon(x)}
-                  className={`h-9 w-9 rounded-lg border text-lg ${icon === x ? "border-brand-600 bg-brand-50" : ""}`}
+                  className={`h-10 w-10 rounded-xl text-lg transition ${icon === x ? "bg-[#191918] shadow-md ring-2 ring-[#191918] ring-offset-2" : "bg-zinc-50 ring-1 ring-zinc-200 hover:scale-110 hover:bg-white"}`}
                   key={x}
                 >
                   {x}
                 </button>
               ))}
-              <label className="flex h-9 items-center rounded-lg border px-2 text-xs font-bold">
-                Anexar
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={upload}
-                  className="hidden"
-                />
-              </label>
+
             </div>
           </div>
           <label className="block text-xs font-bold">
@@ -821,22 +847,22 @@ function NewCategory({
             />
           </label>
         </div>
-        <footer className="relative flex gap-3 border-t bg-gray-50 px-6 py-4">
+        <footer className="relative flex gap-3 border-t border-zinc-100 bg-zinc-50/70 px-6 py-4">
           <button
             type="button"
             onClick={close}
-            className="flex-1 rounded-xl border py-2.5 text-sm font-bold"
+            className="flex-1 rounded-full bg-white py-2.5 text-sm font-medium ring-1 ring-zinc-200 hover:bg-zinc-100"
           >
             Cancelar
           </button>
           <button
             disabled={saving}
-            className="flex-1 rounded-xl bg-brand-700 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+            className="flex-1 rounded-full bg-[#191918] py-2.5 text-sm font-medium text-white shadow-[0_10px_24px_-12px_rgba(24,24,27,0.9)] hover:bg-black disabled:opacity-60"
           >
             {saving
               ? "Salvando no banco..."
               : category
-                ? "Salvar alteracoes"
+                ? "Salvar alterações"
                 : "Criar categoria"}
           </button>
           {saveError && (
@@ -865,7 +891,7 @@ function CostCenterForm({
   const [error, setError] = useState("");
   const isEdit = Boolean(editing);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+    <div className="fc-overlay fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] p-4">
       <form onSubmit={async (event) => {
         event.preventDefault();
         setSaving(true);
@@ -881,20 +907,20 @@ function CostCenterForm({
       }} className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
         <header className="flex items-start justify-between border-b px-6 py-4">
           <div>
-            <h2 className="font-extrabold text-[#191918]">{isEdit ? "Editar plano de contas" : "Novo plano de contas"}</h2>
-            <p className="mt-1 text-xs text-slate-500">{isEdit ? "Ajuste a sigla e a cor deste centro de custo." : "Cria um centro de custo com categorias próprias."}</p>
+            <h2 className="fc-h">{isEdit ? "Editar plano de contas" : "Novo plano de contas"}</h2>
+            <p className="mt-1 text-xs text-zinc-500">{isEdit ? "Ajuste a sigla e a cor deste centro de custo." : "Cria um centro de custo com categorias próprias."}</p>
           </div>
           <button type="button" onClick={close} aria-label="Fechar"><X className="h-5 w-5" /></button>
         </header>
         <div className="space-y-4 p-6">
-          <label className="block text-xs font-bold text-slate-700">Nome do centro de custo
-            <input required minLength={2} maxLength={80} value={name} disabled={isEdit} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Nova operação" className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal disabled:cursor-not-allowed disabled:text-slate-400" />
-            {isEdit && <span className="mt-1 block font-normal text-slate-400">O nome não pode ser alterado.</span>}
+          <label className="block text-xs font-bold text-zinc-700">Nome do centro de custo
+            <input required minLength={2} maxLength={80} value={name} disabled={isEdit} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Nova operação" className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal disabled:cursor-not-allowed disabled:text-zinc-400" />
+            {isEdit && <span className="mt-1 block font-normal text-zinc-400">O nome não pode ser alterado.</span>}
           </label>
-          <label className="block text-xs font-bold text-slate-700">Sigla (opcional)
-            <input maxLength={4} value={initials} onChange={(event) => setInitials(event.target.value)} placeholder="Ex.: NO" className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal" />
+          <label className="block text-xs font-bold text-zinc-700">Sigla (opcional)
+            <input maxLength={4} value={initials} onChange={(event) => setInitials(event.target.value)} placeholder="Ex.: NO" className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal" />
           </label>
-          <div className="text-xs font-bold text-slate-700">Cor do plano
+          <div className="text-xs font-bold text-zinc-700">Cor do plano
             <div className="mt-2 flex flex-wrap gap-2">
               {costCenterColors.map((item) => (
                 <button
@@ -904,16 +930,16 @@ function CostCenterForm({
                   aria-label={item.label}
                   aria-pressed={color === item.key}
                   title={item.label}
-                  className={`h-8 w-8 rounded-full border-2 transition ${color === item.key ? "border-slate-900 ring-2 ring-slate-300" : "border-white"}`}
+                  className={`h-8 w-8 rounded-full border-2 transition ${color === item.key ? "border-zinc-900 ring-2 ring-zinc-300" : "border-white"}`}
                   style={{ backgroundColor: item.swatch }}
                 />
               ))}
             </div>
           </div>
-          {!isEdit && <p className="text-xs text-slate-500">Depois de criar, use “Nova categoria” para cadastrar as receitas e despesas deste plano.</p>}
+          {!isEdit && <p className="text-xs text-zinc-500">Depois de criar, use “Nova categoria” para cadastrar as receitas e despesas deste plano.</p>}
           {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{error}</p>}
         </div>
-        <footer className="flex gap-3 border-t bg-gray-50 px-6 py-4">
+        <footer className="flex gap-3 border-t bg-zinc-50 px-6 py-4">
           <button type="button" onClick={close} className="flex-1 rounded-xl border py-2.5 text-sm font-bold">Cancelar</button>
           <button disabled={saving} className="flex-1 rounded-xl bg-brand-700 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? "Salvando…" : isEdit ? "Salvar alterações" : "Criar plano"}</button>
         </footer>
@@ -939,7 +965,7 @@ function DeleteCostCenter({
   const [error, setError] = useState("");
   const matches = typed.trim() === center.name;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+    <div className="fc-overlay fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] p-4">
       <form onSubmit={async (event) => {
         event.preventDefault();
         if (!matches) return;
@@ -957,7 +983,7 @@ function DeleteCostCenter({
         <header className="flex items-start justify-between border-b px-6 py-4">
           <div>
             <h2 className="font-extrabold text-red-700">Excluir “{center.name}”</h2>
-            <p className="mt-1 text-xs text-slate-500">Esta ação não pode ser desfeita.</p>
+            <p className="mt-1 text-xs text-zinc-500">Esta ação não pode ser desfeita.</p>
           </div>
           <button type="button" onClick={close} aria-label="Fechar"><X className="h-5 w-5" /></button>
         </header>
@@ -970,12 +996,12 @@ function DeleteCostCenter({
               <li>as contas e os favorecidos deste centro</li>
             </ul>
           </div>
-          <label className="block text-xs font-bold text-slate-700">Para confirmar, digite o nome do plano: <span className="text-red-600">{center.name}</span>
-            <input value={typed} onChange={(event) => setTyped(event.target.value)} placeholder={center.name} className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal" />
+          <label className="block text-xs font-bold text-zinc-700">Para confirmar, digite o nome do plano: <span className="text-red-600">{center.name}</span>
+            <input value={typed} onChange={(event) => setTyped(event.target.value)} placeholder={center.name} className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal" />
           </label>
           {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{error}</p>}
         </div>
-        <footer className="flex gap-3 border-t bg-gray-50 px-6 py-4">
+        <footer className="flex gap-3 border-t bg-zinc-50 px-6 py-4">
           <button type="button" onClick={close} className="flex-1 rounded-xl border py-2.5 text-sm font-bold">Cancelar</button>
           <button disabled={!matches || busy} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy ? "Excluindo…" : "Excluir tudo"}</button>
         </footer>
@@ -1097,54 +1123,54 @@ function ContactsScreen({
       </div>
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de cadastro">
         {(allowClients ? (["despesa", "receita"] as Kind[]) : (["despesa"] as Kind[])).map((tabKind) => (
-          <button key={tabKind} type="button" role="tab" aria-selected={kind === tabKind} onClick={() => selectKind(tabKind)} className={`rounded-xl px-4 py-2 text-sm font-bold ${kind === tabKind ? "bg-brand-700 text-white" : "border bg-white text-slate-600"}`}>
+          <button key={tabKind} type="button" role="tab" aria-selected={kind === tabKind} onClick={() => selectKind(tabKind)} className={`rounded-xl px-4 py-2 text-sm font-bold ${kind === tabKind ? "bg-brand-700 text-white" : "border bg-white text-zinc-600"}`}>
             {tabKind === "despesa" ? "Fornecedores" : "Clientes / pagadores"}
           </button>
         ))}
       </div>
       <div>
-        <h3 className="font-extrabold text-[#191918]">{title}</h3>
-        <p className="text-xs text-gray-500">
+        <h3 className="fc-h">{title}</h3>
+        <p className="text-xs text-zinc-500">
           {kind === "despesa"
             ? "Cadastre o fornecedor e o que ele fornece para selecioná-lo nas despesas."
             : "Cadastre quem paga para selecioná-lo nas receitas."}
         </p>
       </div>
       {!tableReady && (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        <p className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
           Prévia local: os nomes dos lançamentos antigos aparecem abaixo. Para criar ou alterar cadastros compartilhados, ainda é necessário aplicar a migração ao banco.
         </p>
       )}
       {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
-      <form onSubmit={submit} className="grid gap-3 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-[1fr_1fr_auto] md:items-end">
-        <label className="text-xs font-bold text-slate-700">
+      <form onSubmit={submit} className="grid gap-3 fc-card p-5 md:grid-cols-[1fr_1fr_auto] md:items-end">
+        <label className="text-xs font-bold text-zinc-700">
           Nome
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+            className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
             placeholder={kind === "despesa" ? "Nome do fornecedor" : "Nome do cliente / pagador"}
             disabled={!tableReady}
           />
         </label>
-        <label className="text-xs font-bold text-slate-700">
+        <label className="text-xs font-bold text-zinc-700">
           Centro de custo
           <select
             value={unit}
             onChange={(event) => setUnit(event.target.value as Unit)}
-            className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+            className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
             disabled={!tableReady || !!editing}
           >
             {allowedUnits.map((allowed) => <option key={allowed.name}>{allowed.name}</option>)}
           </select>
         </label>
         {kind === "despesa" && (
-          <label className="text-xs font-bold text-slate-700 md:col-span-2">
+          <label className="text-xs font-bold text-zinc-700 md:col-span-2">
             O que fornece
             <input
               value={provides}
               onChange={(event) => setProvides(event.target.value)}
-              className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+              className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               placeholder="Ex.: serviços de limpeza, insumos, consultoria"
               disabled={!tableReady}
             />
@@ -1152,20 +1178,20 @@ function ContactsScreen({
         )}
         <div className="flex gap-2 md:col-start-3">
           {editing && <button type="button" onClick={reset} className="rounded-xl border px-4 py-3 text-xs font-bold">Cancelar</button>}
-          <button type="submit" disabled={!tableReady || saving || !allowedUnits.length} className="rounded-xl bg-brand-700 px-4 py-3 text-xs font-bold text-white disabled:opacity-50">
+          <button type="submit" disabled={!tableReady || saving || !allowedUnits.length} className="rounded-full bg-[#191918] px-4 py-3 hover:bg-black shadow-[0_8px_20px_-10px_rgba(24,24,27,0.8)] text-xs font-bold text-white disabled:opacity-50">
             {saving ? "Salvando…" : editing ? "Salvar" : "Cadastrar"}
           </button>
         </div>
       </form>
-      <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <section className="fc-card p-5">
         <h3 className="mb-3 font-extrabold text-[#191918]">Cadastrados ({relevant.length})</h3>
         {relevant.length ? (
           <div className="divide-y">
             {relevant.map((contact) => (
               <div key={contact.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div>
-                  <p className="font-bold text-slate-800">{contact.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="font-bold text-zinc-800">{contact.name}</p>
+                  <p className="text-xs text-zinc-500">
                     {contact.unit}
                     {kind === "despesa" && ` · ${contact.provides || "O que fornece não informado"}`}
                   </p>
@@ -1194,18 +1220,18 @@ function ContactsScreen({
             ))}
           </div>
         ) : (
-          <p className="py-5 text-center text-sm text-gray-400">Nenhum nome informado nos lançamentos deste acesso.</p>
+          <p className="py-5 text-center text-sm text-zinc-400">Nenhum nome informado nos lançamentos deste acesso.</p>
         )}
       </section>
       {archivedContacts.length > 0 && (
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
+        <section className="fc-card p-5">
           <h3 className="mb-3 font-extrabold text-[#191918]">Arquivados ({archivedContacts.length})</h3>
           <div className="divide-y">
             {archivedContacts.map((contact) => (
               <div key={contact.id} className="flex items-center justify-between gap-3 py-3">
                 <div>
-                  <p className="font-bold text-slate-600">{contact.name}</p>
-                  <p className="text-xs text-gray-400">{contact.unit}</p>
+                  <p className="font-bold text-zinc-600">{contact.name}</p>
+                  <p className="text-xs text-zinc-400">{contact.unit}</p>
                 </div>
                 <button type="button" disabled={archiveBusy} onClick={() => void changeArchive(contact, false)} className="rounded-lg border px-3 py-1.5 text-xs font-bold text-brand-700 disabled:opacity-50">
                   Restaurar
@@ -1216,10 +1242,10 @@ function ContactsScreen({
         </section>
       )}
       {confirmArchive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation" onClick={() => setConfirmArchive(null)}>
+        <div className="fc-overlay fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4" role="presentation" onClick={() => setConfirmArchive(null)}>
           <section role="dialog" aria-modal="true" aria-labelledby="archive-contact-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <h3 id="archive-contact-title" className="text-lg font-extrabold text-[#191918]">Excluir {confirmArchive.name}?</h3>
-            <p className="mt-2 text-sm text-gray-600">O cadastro será arquivado e sairá das opções de novos lançamentos. Os lançamentos antigos e seus valores serão preservados.</p>
+            <p className="mt-2 text-sm text-zinc-600">O cadastro será arquivado e sairá das opções de novos lançamentos. Os lançamentos antigos e seus valores serão preservados.</p>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setConfirmArchive(null)} className="rounded-xl border px-4 py-2 text-xs font-bold">Cancelar</button>
               <button type="button" disabled={archiveBusy} onClick={() => void changeArchive(confirmArchive, true)} className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{archiveBusy ? "Arquivando…" : "Excluir cadastro"}</button>
@@ -1547,7 +1573,7 @@ export function EntryForm({
   };
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4"
+      className="fc-overlay fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-[2px] p-4"
       // Soltar um arquivo em qualquer ponto do formulário anexa o arquivo, em
       // vez de o navegador sair da tela para abri-lo.
       onDragOver={(event) => event.preventDefault()}
@@ -1563,10 +1589,10 @@ export function EntryForm({
       >
         <header className="flex items-center justify-between border-b px-6 py-4">
           <div>
-            <h2 className="font-extrabold text-[#191918]">
+            <h2 className="fc-h">
               {editing ? "Editar" : "Novo"} lançamento{cardMode ? ` no cartão ${cardMode.name}` : ""}
             </h2>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-zinc-400">
               A categoria é filtrada pelo plano de contas do centro escolhido.
             </p>
           </div>
@@ -1584,7 +1610,7 @@ export function EntryForm({
                 setCounterpartyId("");
                 setBeneficiary("");
               }}
-              className={`p-3 ${kind === "despesa" ? "bg-red-600 text-white" : "text-gray-500"}`}
+              className={`p-3 ${kind === "despesa" ? "bg-red-600 text-white" : "text-zinc-500"}`}
             >
               Despesa
             </button>
@@ -1595,7 +1621,7 @@ export function EntryForm({
                 setCounterpartyId("");
                 setBeneficiary("");
               }}
-              className={`p-3 ${kind === "receita" ? "bg-emerald-600 text-white" : "text-gray-500"}`}
+              className={`p-3 ${kind === "receita" ? "bg-emerald-600 text-white" : "text-zinc-500"}`}
             >
               Receita
             </button>
@@ -1611,7 +1637,7 @@ export function EntryForm({
                   setCounterpartyId("");
                   setBeneficiary("");
                 }}
-                className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+                className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               >
                 {allowedUnits.map((u) => (
                   <option key={u.name}>{u.name}</option>
@@ -1626,7 +1652,7 @@ export function EntryForm({
               required
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+              className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
             >
               <option value="" disabled>
                 Selecione uma categoria
@@ -1650,7 +1676,7 @@ export function EntryForm({
               required
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+              className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
             />
           </label>
           <div
@@ -1710,29 +1736,29 @@ export function EntryForm({
                     setContactPickerOpen(true);
                   }}
                   placeholder={kind === "despesa" ? "Selecione ou digite o fornecedor" : "Selecione ou digite o cliente"}
-                  className="w-full rounded-xl border bg-gray-50 p-3 pr-10 text-sm font-normal focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className="w-full rounded-xl border bg-zinc-50 p-3 pr-10 text-sm font-normal focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 />
                 <button type="button" aria-label="Mostrar contatos cadastrados" aria-expanded={contactPickerOpen} onClick={() => {
                   setContactSearch("");
                   setContactActiveIndex(-1);
                   setContactPickerOpen((open) => !open);
-                }} className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500">
+                }} className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-zinc-500">
                   <ChevronRight className={`h-4 w-4 transition-transform ${contactPickerOpen ? "rotate-90" : "rotate-0"}`} />
                 </button>
               {contactPickerOpen && (
-                <div id="entry-counterparty-options" role="listbox" className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 text-left shadow-xl">
+                <div id="entry-counterparty-options" role="listbox" className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-52 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1.5 text-left shadow-xl">
                   {matchingContacts.length ? matchingContacts.map((contact, index) => (
-                    <button key={contact.id} type="button" role="option" aria-selected={contactActiveIndex === index} onClick={() => chooseContact(contact)} className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${contactActiveIndex === index ? "bg-brand-50 text-brand-800" : "text-slate-800 hover:bg-slate-50"}`}>
+                    <button key={contact.id} type="button" role="option" aria-selected={contactActiveIndex === index} onClick={() => chooseContact(contact)} className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${contactActiveIndex === index ? "bg-brand-50 text-brand-800" : "text-zinc-800 hover:bg-zinc-50"}`}>
                       <span className="truncate">{contact.name}</span>
-                      <span className="shrink-0 text-[11px] font-normal text-slate-500">{contact.unit}</span>
+                      <span className="shrink-0 text-[11px] font-normal text-zinc-500">{contact.unit}</span>
                     </button>
                   )) : (
-                    <p className="px-3 py-2.5 text-xs font-normal text-slate-500">{beneficiary.trim() ? "Nome novo: salve o lançamento para cadastrá-lo." : "Nenhum contato cadastrado."}</p>
+                    <p className="px-3 py-2.5 text-xs font-normal text-zinc-500">{beneficiary.trim() ? "Nome novo: salve o lançamento para cadastrá-lo." : "Nenhum contato cadastrado."}</p>
                   )}
                 </div>
               )}
               </div>
-              <span className="mt-1 block text-[11px] font-normal text-gray-500">
+              <span className="mt-1 block text-[11px] font-normal text-zinc-500">
                 Escolha um contato de qualquer centro permitido ou digite um nome novo. Ao escolher outro centro, o lançamento muda para ele.
               </span>
             </div>
@@ -1742,7 +1768,7 @@ export function EntryForm({
                 <input
                   value={pix}
                   onChange={(e) => setPix(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+                  className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
                 />
               </label>
             )}
@@ -1752,15 +1778,15 @@ export function EntryForm({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+              className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
             />
           </label>
           <div className="block text-xs font-bold">
             Anexos (boleto, comprovante, nota)
             <div className="mt-1.5 space-y-2">
               {existingAttachments.map((path) => (
-                <div key={path} className="flex items-center gap-2 rounded-xl border bg-gray-50 p-2 text-xs font-normal">
-                  <Paperclip className="h-4 w-4 shrink-0 text-slate-500" />
+                <div key={path} className="flex items-center gap-2 rounded-xl border bg-zinc-50 p-2 text-xs font-normal">
+                  <Paperclip className="h-4 w-4 shrink-0 text-zinc-500" />
                   <button type="button" onClick={() => void openAttachment(path)} className="flex-1 truncate text-left text-brand-700 hover:underline">
                     {attachmentName(path)}
                   </button>
@@ -1809,11 +1835,11 @@ export function EntryForm({
                   setDragging(false);
                   void addFiles(Array.from(event.dataTransfer.files));
                 }}
-                className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-5 text-xs font-bold transition ${dragging ? "border-brand-500 bg-brand-50 text-brand-700" : "border-slate-300 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700"}`}
+                className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-5 text-xs font-bold transition ${dragging ? "border-brand-500 bg-brand-50 text-brand-700" : "border-zinc-300 bg-white text-zinc-600 hover:border-brand-300 hover:text-brand-700"}`}
               >
                 <Plus className="h-5 w-5" />
                 {dragging ? "Solte o arquivo para anexar" : "Arraste o arquivo aqui ou clique para escolher"}
-                <span className="font-normal text-slate-400">PDF, PNG ou JPG · até 10 MB</span>
+                <span className="font-normal text-zinc-400">PDF, PNG ou JPG · até 10 MB</span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,application/pdf"
@@ -1839,7 +1865,7 @@ export function EntryForm({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+                className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               />
             </label>
             {cardMode && purchaseCycle && <div className="rounded-xl bg-brand-50 p-3 text-sm" aria-live="polite">
@@ -1854,7 +1880,7 @@ export function EntryForm({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as Entry["status"])}
-                className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+                className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               >
                 <option value="previsto">Previsto</option>
                 <option value="realizado">Realizado</option>
@@ -1873,9 +1899,9 @@ export function EntryForm({
                     ) : computedDiscount > 0 ? (
                       <span className="font-bold text-emerald-700">Juros R$ 0,00 · Desconto: {fmt(computedDiscount)}</span>
                     ) : Number.isFinite(paidNumber) ? (
-                      <span className="text-slate-500">Pago sem juros nem desconto.</span>
+                      <span className="text-zinc-500">Pago sem juros nem desconto.</span>
                     ) : (
-                      <span className="text-slate-400">Informe quanto pagou de fato: o sistema calcula juros ou desconto.</span>
+                      <span className="text-zinc-400">Informe quanto pagou de fato: o sistema calcula juros ou desconto.</span>
                     )}
                   </span>
                 </label>
@@ -1886,20 +1912,20 @@ export function EntryForm({
                   type="date"
                   value={paidDate}
                   onChange={(e) => setPaidDate(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal"
+                  className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
                 />
-                <span className="mt-1 block font-normal text-slate-400">Mede o atraso em relação ao vencimento (campo Data).</span>
+                <span className="mt-1 block font-normal text-zinc-400">Mede o atraso em relação ao vencimento (campo Data).</span>
               </label>
 
             </div>
           )}
           {!cardMode && <label className="block text-xs font-bold">
             {kind === "receita" ? "Conta bancária de recebimento" : "Conta bancária de pagamento"}
-            <select value={bankId} onChange={(e) => setBankId(e.target.value)} className="mt-1.5 w-full rounded-xl border bg-gray-50 p-3 text-sm font-normal">
+            <select value={bankId} onChange={(e) => setBankId(e.target.value)} className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal">
               <option value="">Não informada</option>
               {banks.map((bank) => <option key={bank.id} value={bank.id}>{bank.name}</option>)}
             </select>
-            <span className="mt-1 block font-normal text-slate-400">{banks.length ? "Define a conta usada na movimentação. Centros de custo são escolhidos separadamente." : "Cadastre uma conta bancária na aba Contas."}</span>
+            <span className="mt-1 block font-normal text-zinc-400">{banks.length ? "Define a conta usada na movimentação. Centros de custo são escolhidos separadamente." : "Cadastre uma conta bancária na aba Contas."}</span>
           </label>}
           {cardMode && <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-800">Esta compra compõe a fatura do cartão. O vencimento segue o fechamento do cartão; a conta bancária será escolhida ao pagar a fatura. Assinaturas: marque Repetir valor fixo. Parcelamentos: informe a quantidade de meses.</p>}
           {converting && (
@@ -1924,7 +1950,7 @@ export function EntryForm({
               <select value={frequency} disabled={Boolean(editing?.seriesId)} onChange={e=>{setFrequency(e.target.value as "mensal" | "semanal");if(e.target.value === "semanal")setSameMonthInstallments(false);}} className="mt-1 block w-full rounded-xl border bg-white p-2.5 text-sm">
                 <option value="mensal">Mensal — a cada mês</option><option value="semanal">Semanal — a cada 7 dias</option>
               </select>
-              {editing?.seriesId && <span className="mt-1 block font-normal text-slate-500">Para mudar a frequência, crie uma nova recorrência.</span>}
+              {editing?.seriesId && <span className="mt-1 block font-normal text-zinc-500">Para mudar a frequência, crie uma nova recorrência.</span>}
             </label>}
             {!recurrence && !sameMonthInstallments && (!editing || standaloneEdit) && (
               <label className="flex items-center gap-2 text-sm font-bold">
@@ -1996,7 +2022,7 @@ export function EntryForm({
                   Quero uma parcela por mês ({sameMonthPartCount} meses)
                 </button>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <label className="flex items-center gap-2 text-xs font-bold text-zinc-700">
                     Quantidade de parcelas
                     <input
                       min="2"
@@ -2012,7 +2038,7 @@ export function EntryForm({
                           sameMonthParts(count, parseMoney(amount) || 0, date),
                         );
                       }}
-                      className="w-16 rounded-lg border bg-gray-50 p-1.5 text-center font-normal"
+                      className="w-16 rounded-lg border bg-zinc-50 p-1.5 text-center font-normal"
                     />
                   </label>
                   <button
@@ -2039,7 +2065,7 @@ export function EntryForm({
                     <span className="pb-3 text-xs font-extrabold text-brand-700">
                       {index + 1}ª parcela
                     </span>
-                    <label className="text-[11px] font-bold text-gray-500">
+                    <label className="text-[11px] font-bold text-zinc-500">
                       Data
                       <input
                         type="date"
@@ -2053,10 +2079,10 @@ export function EntryForm({
                             ),
                           )
                         }
-                        className="mt-1 block w-full rounded-lg border bg-gray-50 p-2 text-sm font-normal"
+                        className="mt-1 block w-full rounded-lg border bg-zinc-50 p-2 text-sm font-normal"
                       />
                     </label>
-                    <label className="text-[11px] font-bold text-gray-500">
+                    <label className="text-[11px] font-bold text-zinc-500">
                       Valor
                       <CurrencyInput
                         value={part.amount}
@@ -2101,7 +2127,7 @@ export function EntryForm({
             {!recurrence && !sameMonthInstallments && installments > 1 && (
               <section className="col-span-full rounded-xl border bg-white p-3" aria-label="Prévia das parcelas mensais">
                 <h3 className="text-sm font-extrabold">Uma parcela por mês · {installments} meses</h3>
-                <p className="mt-1 text-xs text-slate-500">O valor total será dividido entre os meses abaixo.{cardMode ? " No cartão, as datas abaixo já são os vencimentos de cada fatura." : " A primeira data é a do lançamento; cada parcela seguinte avança um mês."}</p>
+                <p className="mt-1 text-xs text-zinc-500">O valor total será dividido entre os meses abaixo.{cardMode ? " No cartão, as datas abaixo já são os vencimentos de cada fatura." : " A primeira data é a do lançamento; cada parcela seguinte avança um mês."}</p>
                 <div className="mt-3 max-h-72 overflow-y-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b"><th className="p-2">Parcela</th><th>Vencimento</th><th className="text-right">Valor</th></tr></thead><tbody>
                   {monthlyPreview.map(part => <tr key={part.installment} className="border-b"><td className="p-2">{part.installment}</td><td>{part.date.split('-').reverse().join('/')}</td><td className="text-right">{fmt(part.amount)}</td></tr>)}
                 </tbody></table></div>
@@ -2110,7 +2136,7 @@ export function EntryForm({
             )}
           </div>
         </div>
-        <footer className="relative flex gap-3 border-t bg-gray-50 px-6 py-4">
+        <footer className="relative flex gap-3 border-t bg-zinc-50 px-6 py-4">
           <button
             type="button"
             onClick={close}
@@ -2168,12 +2194,12 @@ function Entries({
   };
   if (!entries.length)
     return (
-      <div className="rounded-xl border border-dashed p-10 text-center text-sm text-gray-400">
+      <div className="rounded-2xl bg-zinc-50 p-10 text-center text-sm text-zinc-500">
         Nenhum lançamento neste mês.
       </div>
     );
   return (
-    <div className="divide-y">
+    <div className="fc-rows divide-y divide-zinc-100">
       {[...entries]
         .sort((a, b) => b.date.localeCompare(a.date))
         .map((x) => {
@@ -2181,6 +2207,8 @@ function Entries({
             (v) =>
               v.name === x.category && v.unit === x.unit && v.kind === x.kind,
           );
+          const late = x.status === "previsto" && x.date < todayKey;
+          const bank = bankName(x.bankId);
           return (
             <div
               key={x.id}
@@ -2195,121 +2223,65 @@ function Entries({
               onKeyDown={(event) => {
                 if (open && event.key === "Enter" && event.target === event.currentTarget) open(x);
               }}
-              className={`flex flex-wrap items-center gap-3 py-3 ${open ? "-mx-2 cursor-pointer rounded-xl px-2 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600" : ""}`}
+              className={`group flex items-center gap-3 py-3 ${open ? "-mx-3 cursor-pointer rounded-2xl px-3 transition hover:bg-zinc-50" : ""}`}
             >
-              <Icon category={c} />
+              <span className="transition-transform duration-300 group-hover:scale-105"><Icon category={c} /></span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-gray-800">
-                  {x.description}{" "}
-                  {x.installment && (
-                    <span className="text-gray-400">({x.installment})</span>
-                  )}
+                <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-[#191918]">
+                  <span className="truncate">{x.description}</span>
+                  {x.installment && <span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-normal text-zinc-500">{x.installment}</span>}
+                  {x.attachments && x.attachments.length > 0 && x.attachments.map((path) => (
+                    <button key={path} type="button" onClick={() => void openAttachment(path)} title={attachmentLabel(path)} className="shrink-0 rounded-full p-1 text-zinc-400 hover:bg-zinc-200 hover:text-[#191918]"><Paperclip className="h-3 w-3" /></button>
+                  ))}
                 </p>
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-400">
+                <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-zinc-500">
                   <span
-                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-extrabold ${x.status === "previsto" && x.date < todayKey ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-800"}`}
-                    title={x.status === "previsto" && x.date < todayKey ? "Vencido e ainda não pago" : "Data de vencimento"}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${late ? "bg-red-50 text-red-700 ring-1 ring-red-100" : "bg-zinc-100 text-zinc-600"}`}
+                    title={late ? "Vencido e ainda não pago" : "Data de vencimento"}
                   >
-                    <CalendarClock className="h-3.5 w-3.5" />
+                    <CalendarClock className="h-3 w-3" />
                     {new Date(`${x.date}T12:00:00`).toLocaleDateString("pt-BR")}
                   </span>
-                  <span>{x.unit} · {x.category}</span>
+                  <span className="truncate">{x.category}</span>
+                  {x.beneficiary?.trim() && <span className="truncate text-zinc-400">· {x.beneficiary.trim()}</span>}
+                  {bank && <span className="inline-flex items-center gap-1 text-zinc-400">· <BankLogo name={bank} className="h-4 w-4 rounded-[5px] text-[7px]" />{bank}</span>}
                 </p>
-                {x.beneficiary?.trim() && (
-                  <p className="mt-1 text-xs font-medium text-slate-600">
-                    {x.kind === "despesa" ? "Fornecedor / favorecido" : "Cliente / pagador"}: {x.beneficiary.trim()}
+                {(x.pix || x.notes || (x.kind === "despesa" && ((x.juros ?? 0) > 0 || (x.discount ?? 0) > 0 || x.paidDate))) && (
+                  <p className="mt-1 truncate text-[11px] text-zinc-400">
+                    {x.kind === "despesa" && x.paidDate && <>Pago em {new Date(`${x.paidDate}T12:00:00`).toLocaleDateString("pt-BR")}{lateDays(x) > 0 ? <b className="font-medium text-orange-600"> · {lateDays(x)} dia(s) de atraso</b> : " · em dia"}</>}
+                    {(x.juros ?? 0) > 0 && <> · Juros <b className="font-medium text-red-600">{fmt(x.juros ?? 0)}</b></>}
+                    {(x.discount ?? 0) > 0 && <> · Desconto <b className="font-medium text-emerald-700">{fmt(x.discount ?? 0)}</b></>}
+                    {x.pix && <> · PIX {x.pix}</>}
+                    {x.notes && <> · {x.notes}</>}
                   </p>
                 )}
-                {(x.pix || x.notes) && (
-                  <div className="mt-1 space-y-0.5 text-xs">
-                    {x.pix && (
-                      <p className="truncate font-bold text-brand-700">
-                        Chave PIX: {x.pix}
-                      </p>
-                    )}
-                    {x.notes && (
-                      <p className="truncate text-gray-500">
-                        Observações: {x.notes}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {x.attachments && x.attachments.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {x.attachments.map((path) => (
-                      <button
-                        key={path}
-                        type="button"
-                        onClick={() => void openAttachment(path)}
-                        className="inline-flex max-w-[180px] items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-[11px] font-bold text-brand-700 hover:bg-brand-100"
-                        title={attachmentLabel(path)}
-                      >
-                        <Paperclip className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{attachmentLabel(path)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {bankName(x.bankId) && <p className="mt-1 text-[11px] font-bold text-slate-600">Conta bancária: {bankName(x.bankId)}</p>}
-                {x.kind === "despesa" &&
-                  ((x.juros ?? 0) > 0 || (x.discount ?? 0) > 0 || x.paidDate || bankName(x.bankId)) && (
-                  <div className="mt-1 space-y-0.5 text-[11px]">
-                    {((x.juros ?? 0) > 0 || (x.discount ?? 0) > 0) && (
-                      <p className="text-slate-500">
-                        Valor {fmt(x.amount)}
-                        {(x.juros ?? 0) > 0 && <> · Juros <b className="text-red-600">{fmt(x.juros ?? 0)}</b></>}
-                        {(x.discount ?? 0) > 0 && <> · Desconto <b className="text-emerald-700">{fmt(x.discount ?? 0)}</b></>}
-                        {" "}· Total pago <b className="text-slate-700">{fmt(entryValue(x))}</b>
-                      </p>
-                    )}
-                    {x.paidDate && (
-                      <p className="text-slate-500">
-                        Pago em {new Date(`${x.paidDate}T12:00:00`).toLocaleDateString("pt-BR")}
-                        {lateDays(x) > 0 ? (
-                          <> · <b className="text-orange-600">{lateDays(x)} dia(s) de atraso</b></>
-                        ) : (
-                          " · em dia"
-                        )}
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
-              <div className="text-right">
-                <p
-                  className={`text-sm font-extrabold ${x.kind === "receita" ? "text-emerald-600" : "text-red-600"}`}
-                >
-                  {x.kind === "receita" ? "+" : "-"}
+              <div className="shrink-0 text-right">
+                <p className={`text-sm font-semibold tracking-[-0.01em] ${x.kind === "receita" ? "text-emerald-600" : "text-[#191918]"}`}>
+                  {x.kind === "receita" ? "+" : "−"}
                   {fmt(entryValue(x))}
                 </p>
-                {x.invoiceSummary && <p className="mt-1 text-[11px] text-slate-500">Pago {fmt(x.invoicePaidAmount||0)} · Em aberto {fmt(x.invoicePendingAmount||0)}</p>}
-                <p className="text-[10px] font-bold uppercase text-gray-400">
-                  {x.invoiceSummary ? "Fatura total" : entryScheduleLabel(x)}
+                <p className={`mt-0.5 text-[10.5px] ${x.status === "realizado" ? "text-emerald-600" : late ? "text-red-600" : "text-zinc-400"}`}>
+                  {x.invoiceSummary ? `Pago ${fmt(x.invoicePaidAmount||0)} · Aberto ${fmt(x.invoicePendingAmount||0)}` : x.status === "realizado" ? (x.kind === "despesa" ? "Pago" : "Recebido") : late ? "Vencido" : entryScheduleLabel(x)}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => edit(x)}
-                  className="rounded-lg border px-2 py-1.5 text-[11px] font-bold"
-                >
-                  {x.creditCardId ? "Detalhar fatura" : "Editar"}
-                </button>
-                {!x.balanceAdjustment && !x.creditCardId && <button
-                  onClick={() => remove(x)}
-                  className="rounded-lg border border-red-200 px-2 py-1.5 text-[11px] font-bold text-red-600"
-                >
-                  Excluir
-                </button>}
+              <div className="flex shrink-0 items-center gap-0.5">
                 <button
                   onClick={() => settle(x)}
-                  className={`rounded-lg px-2 py-1.5 text-[11px] font-bold ${x.status === "realizado" ? "bg-emerald-50 text-emerald-700" : x.kind === "despesa" ? "bg-orange-600 text-white" : "bg-emerald-600 text-white"}`}
+                  title={x.balanceAdjustment ? "Editar saldo" : x.creditCardId ? "Ver fatura" : x.status === "realizado" ? "Realizado · clique para reverter" : x.kind === "despesa" ? "Dar baixa" : "Receber"}
+                  aria-label={x.balanceAdjustment ? "Editar saldo" : x.creditCardId ? "Ver fatura" : x.status === "realizado" ? "Reverter baixa" : x.kind === "despesa" ? "Dar baixa" : "Receber"}
+                  className={`rounded-full p-2 ${x.status === "realizado" ? "bg-emerald-500 text-white shadow-[0_6px_14px_-6px_rgba(16,185,129,0.9)] hover:bg-emerald-600" : "text-zinc-400 ring-1 ring-inset ring-zinc-200 hover:bg-emerald-50 hover:text-emerald-600 hover:ring-emerald-200"}`}
                 >
-                  {x.balanceAdjustment ? "Editar saldo" : x.creditCardId ? "Ver fatura" : x.status === "realizado"
-                    ? "Baixado - reverter"
-                    : x.kind === "despesa"
-                      ? "Dar baixa"
-                      : "Receber"}
+                  <CheckCircle2 className="h-4 w-4" />
                 </button>
+                <button onClick={() => edit(x)} title={x.creditCardId ? "Detalhar fatura" : "Editar"} aria-label={x.creditCardId ? "Detalhar fatura" : `Editar ${x.description}`} className="rounded-full p-2 text-zinc-400 hover:bg-white hover:text-[#191918] hover:shadow-sm md:opacity-0 md:group-hover:opacity-100">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                {!x.balanceAdjustment && !x.creditCardId && (
+                  <button onClick={() => { if (x.seriesId || window.confirm(`Excluir o lançamento “${x.description}”?`)) remove(x); }} title="Excluir" aria-label={`Excluir ${x.description}`} className="rounded-full p-2 text-zinc-300 hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -2317,14 +2289,57 @@ function Entries({
     </div>
   );
 }
+// Lists the entries behind a dashboard number so every value can be inspected.
+type DrillState = { title: string; subtitle?: string; items: Entry[]; seeAll?: () => void };
+function EntryDrill({
+  drill, categories, banks, cards, close, open,
+}: {
+  drill: DrillState; categories: Category[]; banks: Bank[]; cards: { id: string; name: string }[]; close: () => void; open: (entry: Entry) => void;
+}) {
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [close]);
+  const items = [...drill.items].sort((a, b) => b.date.localeCompare(a.date));
+  const income = items.filter((entry) => entry.kind === "receita").reduce((sum, entry) => sum + entryValue(entry), 0);
+  const expense = items.filter((entry) => entry.kind === "despesa").reduce((sum, entry) => sum + entryValue(entry), 0);
+  const todayKey = localDateKey(new Date());
+  return (
+    <div className="fc-overlay fixed inset-0 z-50 flex items-end justify-center bg-zinc-950/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4" role="presentation" onClick={close}>
+      <section role="dialog" aria-modal="true" aria-label={drill.title} onClick={(event) => event.stopPropagation()} className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.5rem] bg-white shadow-2xl sm:rounded-[1.5rem]">
+        <header className="flex items-start gap-3 border-b border-zinc-100 px-6 py-5">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#191918]">{drill.title}</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">{drill.subtitle ?? `${items.length} lançamento(s)`}</p>
+          </div>
+          <button type="button" onClick={close} aria-label="Fechar" className="rounded-full p-2 text-zinc-500 hover:rotate-90 hover:bg-zinc-100 hover:text-[#191918]"><X className="h-5 w-5" /></button>
+        </header>
+        <div className="overflow-y-auto px-5 py-4">
+          {items.length ? <DailyLedger embedded entries={items} categories={categories} banks={banks} cards={cards} onOpen={open} /> : <p className="py-12 text-center text-sm text-zinc-500">Nenhum lançamento compõe este valor no período.</p>}
+        </div>
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/70 px-6 py-4 text-sm">
+          <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+            {income > 0 && <span>Receitas <b className="font-semibold text-emerald-600">{fmt(income)}</b></span>}
+            {expense > 0 && <span>Despesas <b className="font-semibold text-red-600">{fmt(expense)}</b></span>}
+            {!income && !expense && <span>Total <b className="font-semibold text-[#191918]">{fmt(0)}</b></span>}
+          </span>
+          {drill.seeAll && <button type="button" onClick={() => { drill.seeAll?.(); close(); }} className="group flex items-center gap-1 rounded-full bg-[#191918] px-4 py-2 text-xs font-medium text-white hover:bg-black">Ver em Lançamentos<ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></button>}
+        </footer>
+      </section>
+    </div>
+  );
+}
 function Breakdown({
   kind,
   entries,
   categories,
+  onDrill,
 }: {
   kind: Kind;
   entries: Entry[];
   categories: Category[];
+  onDrill?: (title: string, items: Entry[]) => void;
 }) {
   const rows = Object.entries(
     entries
@@ -2335,40 +2350,44 @@ function Breakdown({
       ),
   ).sort((a, b) => b[1] - a[1]);
   const max = rows.reduce((s, [, v]) => s + v, 0);
+  const income = kind === "receita";
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h2 className="mb-4 font-extrabold text-[#191918]">
-        {kind === "receita" ? "Receitas" : "Despesas"} por categoria
-      </h2>
+    <section className="fc-card p-6">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="fc-h">{income ? "Receitas" : "Despesas"} por categoria</h2>
+          <p className="fc-sub mt-1">{rows.length} {rows.length === 1 ? "categoria" : "categorias"} no mês</p>
+        </div>
+        <b className={`text-lg font-semibold tracking-[-0.02em] ${income ? "text-emerald-600" : "text-red-600"}`}>{fmt(max)}</b>
+      </div>
       {rows.length ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {rows.map(([name, value]) => {
             const c = categories.find(
               (x) => x.name === name && x.kind === kind,
             );
+            const share = max ? (value / max) * 100 : 0;
             return (
-              <div key={name} className="flex items-center gap-3">
-                <Icon category={c} />
+              <button type="button" key={name} onClick={() => onDrill?.(name, entries.filter((x) => x.kind === kind && x.category === name))} className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-50">
+                <span className="transition-transform duration-300 group-hover:scale-110"><Icon category={c} /></span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span>{name}</span>
-                    <span>{fmt(value)}</span>
+                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="truncate font-medium text-[#191918]">{name}</span>
+                    <span className="shrink-0 text-zinc-500"><b className="font-semibold text-[#191918]">{fmt(value)}</b> · {Math.round(share)}%</span>
                   </div>
-                  <div className="mt-1.5 h-1.5 rounded-full bg-gray-100">
-                    <div
-                      className={`h-full rounded-full ${kind === "receita" ? "bg-emerald-500" : "bg-red-500"}`}
-                      style={{ width: `${max ? (value / max) * 100 : 0}%` }}
+                  <div className="fc-meter mt-2">
+                    <span
+                      className={income ? "bg-gradient-to-r from-emerald-400 to-emerald-600" : "bg-gradient-to-r from-rose-400 to-red-600"}
+                      style={{ width: `${share}%`, ...(c?.color && !c.color.startsWith("#fff") ? {} : {}) }}
                     />
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       ) : (
-        <p className="py-5 text-center text-sm text-gray-400">
-          Sem dados neste mês.
-        </p>
+        <div className="flex flex-col items-center py-8 text-center"><span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400"><Tag className="h-5 w-5" /></span><p className="text-sm text-zinc-500">Sem {income ? "receitas" : "despesas"} neste mês.</p></div>
       )}
     </section>
   );
@@ -2435,9 +2454,10 @@ function summarizeCounterparties(
 }
 
 function CounterpartyOverview({
-  kind, entries, contacts, todayKey,
+  kind, entries, contacts, todayKey, onDrill,
 }: {
   kind: Kind; entries: Entry[]; contacts: Counterparty[]; todayKey: string;
+  onDrill?: (title: string, items: Entry[]) => void;
 }) {
   const rows = summarizeCounterparties(entries, contacts, kind, todayKey);
   const activeCount = contacts.filter((contact) => contact.kind === kind && !contact.archived).length;
@@ -2446,28 +2466,29 @@ function CounterpartyOverview({
   const unidentified = entries.filter((entry) => entry.kind === kind).reduce((sum, entry) => sum + entryValue(entry), 0) - total;
   const expense = kind === "despesa";
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
+    <section className="fc-card p-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="font-extrabold text-[#191918]">{expense ? "Fornecedores" : "Clientes / pagadores"}</h2>
-          <p className="mt-1 text-xs text-gray-400">Movimentação identificada no mês selecionado.</p>
+          <h2 className="fc-h">{expense ? "Fornecedores" : "Clientes / pagadores"}</h2>
+          <p className="fc-sub mt-1">Movimentação identificada no mês selecionado.</p>
         </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{activeCount} cadastrados</span>
+        <span className="fc-pill">{activeCount} cadastrados</span>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3">
-        <div><p className="text-[11px] text-slate-500">{expense ? "Despesas identificadas" : "Receitas identificadas"}</p><b className={expense ? "text-red-600" : "text-emerald-600"}>{fmt(total)}</b></div>
-        <div><p className="text-[11px] text-slate-500">{expense ? "A pagar" : "A receber"}</p><b className="text-orange-600">{fmt(pending)}</b></div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="fc-card-soft px-4 py-3"><p className="text-[11px] text-zinc-500">{expense ? "Despesas identificadas" : "Receitas identificadas"}</p><b className={`mt-0.5 block text-base font-semibold tracking-[-0.02em] ${expense ? "text-red-600" : "text-emerald-600"}`}>{fmt(total)}</b></div>
+        <div className="fc-card-soft px-4 py-3"><p className="text-[11px] text-zinc-500">{expense ? "A pagar" : "A receber"}</p><b className="mt-0.5 block text-base font-semibold tracking-[-0.02em] text-orange-600">{fmt(pending)}</b></div>
       </div>
-      <div className="mt-3 divide-y divide-slate-100">
+      <div className="mt-3 divide-y divide-zinc-100">
         {rows.filter((row) => row.total > 0).slice(0, 4).map((row) => (
-          <div key={row.key} className="flex items-center justify-between gap-3 py-2.5 text-xs">
-            <span className="min-w-0 truncate font-bold text-slate-700" title={`${row.name} · ${row.unit}`}>{row.name} <span className="font-normal text-slate-400">· {row.unit}</span></span>
-            <b className="shrink-0 text-slate-900">{fmt(row.total)}</b>
-          </div>
+          <button type="button" key={row.key} onClick={() => onDrill?.(row.name, entries.filter((entry) => entry.kind === kind && entry.unit === row.unit && (entry.counterpartyId === row.key || normalizeSearch(entry.beneficiary || "") === normalizeSearch(row.name))))} className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-2.5 text-left text-xs hover:bg-zinc-50">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[11px] font-semibold text-zinc-600">{row.name.slice(0, 1).toUpperCase()}</span>
+            <span className="min-w-0 flex-1 truncate font-medium text-[#191918]" title={`${row.name} · ${row.unit}`}>{row.name} <span className="font-normal text-zinc-400">· {row.unit}</span></span>
+            <b className="shrink-0 font-semibold text-[#191918]">{fmt(row.total)}</b>
+          </button>
         ))}
-        {!rows.some((row) => row.total > 0) && <p className="py-5 text-center text-xs text-slate-400">Sem movimentação identificada neste mês.</p>}
+        {!rows.some((row) => row.total > 0) && <p className="py-5 text-center text-xs text-zinc-400">Sem movimentação identificada neste mês.</p>}
       </div>
-      {unidentified > 0.001 && <p className="mt-2 text-[11px] text-slate-500">Sem {expense ? "fornecedor" : "cliente"} informado: {fmt(unidentified)}</p>}
+      {unidentified > 0.001 && <p className="mt-2 text-[11px] text-zinc-500">Sem {expense ? "fornecedor" : "cliente"} informado: {fmt(unidentified)}</p>}
     </section>
   );
 }
@@ -2498,12 +2519,12 @@ function CounterpartyReportPanel({
   const unidentifiedEntries = entries.filter((entry) => entry.kind === kind && keyForEntry(entry) === null);
   const drill = (title: string, items: Entry[]) => { if (onDrill) onDrill(title, items); };
   return (
-    <section className="rounded-2xl bg-white p-5 shadow-sm">
-      <h2 className="font-extrabold text-[#191918]">{expense ? "Relatório por fornecedor" : "Relatório por cliente / pagador"}</h2>
-      <p className="mt-1 text-xs text-slate-400">Valores dos lançamentos no período e filtros selecionados.</p>
+    <section className="fc-card p-5">
+      <h2 className="fc-h">{expense ? "Relatório por fornecedor" : "Relatório por cliente / pagador"}</h2>
+      <p className="fc-sub mt-1">Valores dos lançamentos no período e filtros selecionados.</p>
       <div className="mt-4 flex flex-wrap gap-3 text-xs">
-        <span className="rounded-lg bg-slate-50 px-3 py-2">{moved.length} com movimentação</span>
-        <span className="rounded-lg bg-slate-50 px-3 py-2">Total identificado: <b>{fmt(total)}</b></span>
+        <span className="rounded-lg bg-zinc-50 px-3 py-2">{moved.length} com movimentação</span>
+        <span className="rounded-lg bg-zinc-50 px-3 py-2">Total identificado: <b>{fmt(total)}</b></span>
         {unidentified > 0.001 && (
           <button
             type="button"
@@ -2532,23 +2553,23 @@ function CounterpartyReportPanel({
         </div>
       )}
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[650px] text-left text-xs">
-          <thead className="border-b bg-slate-50 text-slate-500">
+        <table className="fc-table min-w-[650px] text-left text-xs">
+          <thead>
             <tr><th className="p-3">{expense ? "Fornecedor" : "Cliente / pagador"}</th><th className="p-3">Centro</th><th className="p-3 text-right">{expense ? "Pago" : "Recebido"}</th><th className="p-3 text-right">Em aberto</th><th className="p-3 text-right">Vencido</th><th className="p-3 text-right">Total</th><th className="p-3 text-right">Lanç.</th></tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-zinc-100">
             {rows.map((row) => (
               <tr
                 key={row.key}
                 onClick={() => drill(`${row.name} · ${row.unit}`, entriesFor(row.key))}
-                className={`${row.count > 0 ? "cursor-pointer" : ""} hover:bg-slate-50`}
+                className={`${row.count > 0 ? "cursor-pointer" : ""} hover:bg-zinc-50`}
               >
-                <td className="p-3 font-bold text-slate-800">{row.name}</td><td className="p-3 text-slate-600">{row.unit}</td><td className="p-3 text-right">{fmt(row.realized)}</td><td className="p-3 text-right">{fmt(row.pending)}</td><td className="p-3 text-right text-red-600">{fmt(row.overdue)}</td><td className="p-3 text-right font-extrabold">{fmt(row.total)}</td><td className="p-3 text-right">{row.count}</td>
+                <td className="p-3 font-bold text-zinc-800">{row.name}</td><td className="p-3 text-zinc-600">{row.unit}</td><td className="p-3 text-right">{fmt(row.realized)}</td><td className="p-3 text-right">{fmt(row.pending)}</td><td className="p-3 text-right text-red-600">{fmt(row.overdue)}</td><td className="p-3 text-right font-extrabold">{fmt(row.total)}</td><td className="p-3 text-right">{row.count}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        {!rows.length && <p className="py-8 text-center text-sm text-slate-400">Nenhum cadastro ou lançamento identificado para este filtro.</p>}
+        {!rows.length && <p className="py-8 text-center text-sm text-zinc-400">Nenhum cadastro ou lançamento identificado para este filtro.</p>}
       </div>
     </section>
   );
@@ -2557,6 +2578,7 @@ function CounterpartyReportPanel({
 function Reports({
   entries,
   banks,
+  cards = [],
   allowedUnits,
   categories,
   contacts,
@@ -2564,6 +2586,7 @@ function Reports({
 }: {
   entries: Entry[];
   banks: Bank[];
+  cards?: { id: string; name: string }[];
   allowedUnits: typeof units;
   categories: Category[];
   contacts: Counterparty[];
@@ -2581,6 +2604,12 @@ function Reports({
   const [kind, setKind] = useState<Kind | "todos">(incomeVisible ? "todos" : "despesa");
   const [counterparty, setCounterparty] = useState("Todos");
   const [drill, setDrill] = useState<{ title: string; items: Entry[] } | null>(null);
+  useEffect(() => {
+    if (!drill) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setDrill(null); };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [drill]);
   const openDrill = (title: string, items: Entry[]) => {
     if (!items.length) return;
     setDrill({ title, items: [...items].sort((a, b) => reportingDate(b).localeCompare(reportingDate(a))) });
@@ -2721,29 +2750,29 @@ function Reports({
     .filter(item => account === "Todos" || item.id === account)
     .map(item => ({ ...item, balance: cashPosition(cashEntries.filter(e => (e.bankId || "__unassigned__") === item.id && (unit === "Todos" || e.unit === unit) && (category === "Todos" || e.category === category) && (kind === "todos" || e.kind === kind) && (counterparty === "Todos" || contactIdentity(e.kind,e.unit,e.beneficiary||"") === counterparty)),from,to).closing }));
   return (
-    <section className="space-y-5">
-      <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-800">Compras no cartão entram pela data da compra, mesmo quando a fatura vence depois. Compras parceladas entram uma parcela por mês, a partir da data da compra; assinaturas entram a cada cobrança. Saldos bancários e vencimentos seguem o fluxo de caixa.</p>
-      <div className="rounded-2xl bg-white p-5 shadow-sm">
+    <section className="space-y-4">
+      <div><h2 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.035em] text-[#191918]">Relatórios</h2><p className="fc-sub mt-1 max-w-3xl">Compras no cartão entram pela data da compra, mesmo quando a fatura vence depois. Compras parceladas entram uma parcela por mês, a partir da data da compra; assinaturas entram a cada cobrança. Saldos bancários e vencimentos seguem o fluxo de caixa.</p></div>
+      <div className="fc-card p-5">
         <div className="flex flex-wrap items-end gap-3">
-          <label className="text-xs font-bold">
+          <label className="fc-label">
             De
             <input
               type="date"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
-              className="mt-1.5 block rounded-xl border bg-gray-50 p-2.5 text-sm font-normal"
+              className="mt-1.5 block rounded-full border bg-zinc-50 px-3.5 py-2 text-sm font-normal"
             />
           </label>
-          <label className="text-xs font-bold">
+          <label className="fc-label">
             Até
             <input
               type="date"
               value={to}
               onChange={(event) => setTo(event.target.value)}
-              className="mt-1.5 block rounded-xl border bg-gray-50 p-2.5 text-sm font-normal"
+              className="mt-1.5 block rounded-full border bg-zinc-50 px-3.5 py-2 text-sm font-normal"
             />
           </label>
-          <label className="text-xs font-bold">
+          <label className="fc-label">
             Centro
             <select
               value={unit}
@@ -2753,7 +2782,7 @@ function Reports({
                 setCategory("Todos");
                 setCounterparty("Todos");
               }}
-              className="mt-1.5 block rounded-xl border bg-gray-50 p-2.5 text-sm font-normal"
+              className="mt-1.5 block rounded-full border bg-zinc-50 px-3.5 py-2 text-sm font-normal"
             >
               <option>Todos</option>
               {allowedUnits.map((item) => (
@@ -2761,24 +2790,24 @@ function Reports({
               ))}
             </select>
           </label>
-          <label className="text-xs font-bold">
+          <label className="fc-label">
             Conta bancária
             <select
               value={account}
               onChange={(event) => setAccount(event.target.value)}
-              className="mt-1.5 block rounded-xl border bg-gray-50 p-2.5 text-sm font-normal"
+              className="mt-1.5 block rounded-full border bg-zinc-50 px-3.5 py-2 text-sm font-normal"
             >
               <option>Todos</option>
               <option value="__unassigned__">Sem conta bancária informada</option>
               {banks.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
-          <label className="text-xs font-bold">
+          <label className="fc-label">
             Categoria
             <select
               value={category}
               onChange={(event) => setCategory(event.target.value)}
-              className="mt-1.5 block rounded-xl border bg-gray-50 p-2.5 text-sm font-normal"
+              className="mt-1.5 block rounded-full border bg-zinc-50 px-3.5 py-2 text-sm font-normal"
             >
               <option>Todos</option>
               {[
@@ -2795,7 +2824,7 @@ function Reports({
             </select>
           </label>
           {incomeVisible && (
-          <label className="text-xs font-bold">
+          <label className="fc-label">
             Tipo
             <select
               value={kind}
@@ -2803,7 +2832,7 @@ function Reports({
                 setKind(event.target.value as Kind | "todos");
                 setCounterparty("Todos");
               }}
-              className="mt-1.5 block rounded-xl border bg-gray-50 p-2.5 text-sm font-normal"
+              className="mt-1.5 block rounded-full border bg-zinc-50 px-3.5 py-2 text-sm font-normal"
             >
               <option value="todos">Todos</option>
               <option value="receita">Receitas</option>
@@ -2811,12 +2840,12 @@ function Reports({
             </select>
           </label>
           )}
-          <label className="text-xs font-bold">
+          <label className="fc-label">
             {incomeVisible ? "Fornecedor / cliente" : "Fornecedor"}
             <select
               value={counterparty}
               onChange={(event) => setCounterparty(event.target.value)}
-              className="mt-1.5 block max-w-56 rounded-xl border bg-gray-50 p-2.5 text-sm font-normal"
+              className="mt-1.5 block max-w-56 rounded-full border bg-zinc-50 px-3.5 py-2 text-sm font-normal"
             >
               <option value="Todos">Todos</option>
               {counterpartyOptions.map((contact) => (
@@ -2828,7 +2857,7 @@ function Reports({
           </label>
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="fc-stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {([
           ["Receitas no período", income, "text-emerald-600", pick((e) => e.kind === "receita")],
           ["Despesas no período", expense, "text-red-600", pick((e) => e.kind === "despesa")],
@@ -2850,26 +2879,27 @@ function Reports({
             key={label}
             type="button"
             onClick={() => openDrill(label, items)}
-            className="rounded-2xl bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+            onPointerMove={spot}
+            className="fc-card fc-spot fc-lift group p-5 text-left hover:shadow-lg"
           >
-            <p className="text-xs font-bold text-gray-400">{label}</p>
-            <p className={`mt-2 text-2xl font-extrabold ${color}`}>
-              {fmt(value)}
+            <p className="flex items-center gap-2 text-xs font-medium text-zinc-500"><span className={`h-2 w-2 rounded-full bg-current ${color}`} />{label}</p>
+            <p className={`mt-2 text-2xl font-semibold tracking-[-0.03em] ${color}`}>
+              <Money value={value} />
             </p>
-            <p className="mt-1 text-[11px] font-semibold text-brand-700">{items.length} lançamento(s) →</p>
+            <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-zinc-400 group-hover:text-[#191918]">{items.length} lançamento(s)<ChevronRight className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" /></p>
           </button>
         ))}
       </div>
-      <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <section className="fc-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 className="font-extrabold text-[#191918]">Receitas e consumo no período</h2>
-            <p className="mt-2 text-xs text-slate-600">Caixa por vencimento/pagamento — Saldo anterior: {fmt(reportPosition.opening)} · Saldo final realizado: {fmt(reportPosition.closing)} · Saldo final previsto: {fmt(reportPosition.projectedClosing)}</p>
-            <p className="mt-1 text-xs text-slate-400">
+            <h2 className="fc-h">Receitas e consumo no período</h2>
+            <p className="mt-2 text-xs text-zinc-600">Caixa por vencimento/pagamento — Saldo anterior: {fmt(reportPosition.opening)} · Saldo final realizado: {fmt(reportPosition.closing)} · Saldo final previsto: {fmt(reportPosition.projectedClosing)}</p>
+            <p className="fc-sub mt-1">
               {shortPeriod ? "Visão semanal" : "Visão mensal"} · Passe o mouse nas barras para ver os valores.
             </p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600">
             {filtered.length} lançamentos
           </span>
         </div>
@@ -2877,39 +2907,49 @@ function Reports({
           <div className="mt-5 overflow-x-auto">
             <div style={{ minWidth: Math.max(600, periodBuckets.length * 105) }}>
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={periodBuckets} margin={{ top: 8, right: 8, left: 8, bottom: 4 }} barGap={2}>
-                  <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="3 3" />
+                <BarChart data={periodBuckets} margin={{ top: 8, right: 8, left: 8, bottom: 4 }} barGap={4} maxBarSize={44}>
+                  <CartesianGrid vertical={false} stroke="#ececee" strokeDasharray="3 3" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(value: number) => new Intl.NumberFormat("pt-BR", { notation: "compact" }).format(value)} />
-                  <Tooltip formatter={(value, name) => [fmt(Number(value)), String(name)]} contentStyle={{ borderRadius: 12, borderColor: "#e2e8f0" }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {incomeVisible && <Bar dataKey="Receitas recebidas" stackId="receita" fill="#059669" radius={[0, 0, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas recebidas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "realizado" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />}
-                  {incomeVisible && <Bar dataKey="Receitas previstas" stackId="receita" fill="#6ee7b7" radius={[3, 3, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas previstas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "previsto" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />}
-                  <Bar dataKey="Despesas pagas" stackId="despesa" fill="#dc2626" radius={[0, 0, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas pagas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "realizado" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />
-                  <Bar dataKey="Despesas previstas" stackId="despesa" fill="#fca5a5" radius={[3, 3, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas previstas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "previsto" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />
+                  <Tooltip formatter={(value, name) => [fmt(Number(value)), String(name)]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 16px 36px -10px rgb(24 24 27 / 0.18)" }} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
+                  {incomeVisible && <Bar dataKey="Receitas recebidas" stackId="receita" fill="#059669" radius={[6, 6, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas recebidas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "realizado" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />}
+                  {incomeVisible && <Bar dataKey="Receitas previstas" stackId="receita" fill="#6ee7b7" radius={[6, 6, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Receitas previstas · ${b.label}`, pick((e) => e.kind === "receita" && e.status === "previsto" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />}
+                  <Bar dataKey="Despesas pagas" stackId="despesa" fill="#e11d48" radius={[6, 6, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas pagas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "realizado" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />
+                  <Bar dataKey="Despesas previstas" stackId="despesa" fill="#fda4af" radius={[6, 6, 0, 0]} cursor="pointer" onClick={(data: any) => { const b = data?.payload ?? data; openDrill(`Despesas previstas · ${b.label}`, pick((e) => e.kind === "despesa" && e.status === "previsto" && reportingDate(e) >= b.start && reportingDate(e) <= b.end)); }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-        ) : <p className="py-12 text-center text-sm text-slate-400">Sem lançamentos no período selecionado.</p>}
+        ) : <p className="py-12 text-center text-sm text-zinc-400">Sem lançamentos no período selecionado.</p>}
       </section>
+      <DailyLedger
+        entries={filtered}
+        categories={categories}
+        banks={banks}
+        cards={cards}
+        title="Diário do período"
+        subtitle={`Tudo de ${dateLabel(from)} a ${dateLabel(to)}, dia a dia, separado por cartão e conta. Use os filtros para destrinchar.`}
+        onOpen={(entry) => openDrill(entry.description || "Lançamento", [entry])}
+      />
       <div className="grid gap-5 xl:grid-cols-2">
         {([
           ["Despesas por categoria", expenseDetails, expense],
           ...(incomeVisible ? ([["Receitas por categoria", incomeDetails, income]] as const) : []),
         ] as const).map(([title, rows, totalValue]) => (
-          <section key={title} className="rounded-2xl bg-white p-5 shadow-sm">
-            <h2 className="font-extrabold text-[#191918]">{title}</h2>
-            <p className="mt-1 text-xs text-slate-400">Cor do plano de contas · Centro e percentual na legenda.</p>
+          <section key={title} className="fc-card p-6">
+            <h2 className="fc-h">{title}</h2>
+            <p className="fc-sub mt-1">Cor do plano de contas · Centro e percentual na legenda.</p>
             {rows.length ? (
               <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="h-56 w-full shrink-0 sm:w-56">
+                <div className="relative h-56 w-full shrink-0 sm:w-56">
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center"><span className="text-[11px] text-zinc-500">Total</span><b className="text-base font-semibold tracking-[-0.02em] text-[#191918]">{fmt(totalValue)}</b></div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={rows} dataKey="total" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={2} stroke="none" cursor="pointer" onClick={(data: any) => { const it = data?.payload ?? data; openDrill(`${it.name} · ${it.unit}`, entriesByCategory(it)); }}>
                         {rows.map((item) => <Cell key={item.key} fill={item.color} />)}
                       </Pie>
-                      <Tooltip formatter={(value, _name, item) => [fmt(Number(value)), `${item.payload.name} · ${item.payload.unit}`]} contentStyle={{ borderRadius: 12, borderColor: "#e2e8f0" }} />
+                      <Tooltip formatter={(value, _name, item) => [fmt(Number(value)), `${item.payload.name} · ${item.payload.unit}`]} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 16px 36px -10px rgb(24 24 27 / 0.18)" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -2919,65 +2959,65 @@ function Reports({
                       key={item.key}
                       type="button"
                       onClick={() => openDrill(`${item.name} · ${item.unit}`, entriesByCategory(item))}
-                      className="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left text-xs hover:bg-slate-50"
+                      className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs hover:bg-zinc-50"
                     >
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="min-w-0 flex-1 truncate text-slate-700" title={`${item.name} · ${item.unit}`}>{item.name} <span className="text-slate-400">· {item.unit}</span></span>
-                      <b className="text-slate-800">{totalValue ? Math.round(item.total / totalValue * 100) : 0}%</b>
-                      <span className="w-24 text-right font-bold text-slate-700">{fmt(item.total)}</span>
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white" style={{ backgroundColor: item.color, boxShadow: `0 0 0 1px ${item.color}` }} />
+                      <span className="min-w-0 flex-1 truncate text-zinc-700" title={`${item.name} · ${item.unit}`}>{item.name} <span className="text-zinc-400">· {item.unit}</span></span>
+                      <b className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">{totalValue ? Math.round(item.total / totalValue * 100) : 0}%</b>
+                      <span className="w-24 text-right font-semibold text-[#191918]">{fmt(item.total)}</span>
                     </button>
                   ))}
                 </div>
               </div>
-            ) : <p className="py-12 text-center text-sm text-slate-400">Sem dados no período selecionado.</p>}
+            ) : <p className="py-12 text-center text-sm text-zinc-400">Sem dados no período selecionado.</p>}
           </section>
         ))}
       </div>
-      <section className="rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="font-extrabold text-[#191918]">Detalhamento por categoria</h2>
-        <p className="mt-1 text-xs text-slate-400">Total, situação, vencidos e quantidade de lançamentos no período.</p>
+      <section className="fc-card p-5">
+        <h2 className="fc-h">Detalhamento por categoria</h2>
+        <p className="fc-sub mt-1">Total, situação, vencidos e quantidade de lançamentos no período.</p>
         {categoryDetails.length ? (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-xs">
-              <thead className="border-b bg-slate-50 text-slate-500">
+            <table className="fc-table min-w-[760px] text-left text-xs">
+              <thead>
                 <tr><th className="p-3">Categoria</th><th className="p-3">Centro</th><th className="p-3">Tipo</th><th className="p-3 text-right">Realizado</th><th className="p-3 text-right">Em aberto</th><th className="p-3 text-right">Vencido</th><th className="p-3 text-right">Total</th><th className="p-3 text-right">Lançamentos</th></tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-zinc-100">
                 {categoryDetails.map((item) => (
                   <tr
                     key={item.key}
                     onClick={() => openDrill(`${item.name} · ${item.unit}`, entriesByCategory(item))}
-                    className="cursor-pointer hover:bg-slate-50"
+                    className="cursor-pointer hover:bg-zinc-50"
                   >
-                    <td className="p-3 font-bold text-slate-800"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</td>
-                    <td className="p-3 text-slate-600">{item.unit}</td>
-                    <td className="p-3 text-slate-600">{item.kind === "despesa" ? "Despesa" : "Receita"}</td>
+                    <td className="p-3 font-medium text-zinc-800"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</td>
+                    <td className="p-3 text-zinc-600">{item.unit}</td>
+                    <td className="p-3 text-zinc-600">{item.kind === "despesa" ? "Despesa" : "Receita"}</td>
                     <td className="p-3 text-right">{fmt(item.realized)}</td>
                     <td className="p-3 text-right">{fmt(item.pending)}</td>
                     <td className="p-3 text-right font-bold text-red-600">{fmt(item.overdue)}</td>
-                    <td className="p-3 text-right font-extrabold text-slate-900">{fmt(item.total)}</td>
+                    <td className="p-3 text-right font-semibold text-zinc-900">{fmt(item.total)}</td>
                     <td className="p-3 text-right">{item.count}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : <p className="py-8 text-center text-sm text-slate-400">Sem categorias com movimento no período.</p>}
+        ) : <p className="py-8 text-center text-sm text-zinc-400">Sem categorias com movimento no período.</p>}
       </section>
       <div className="grid gap-5 xl:grid-cols-2">
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="font-extrabold text-[#191918]">Maiores categorias de despesa</h2>
-          <p className="mt-1 text-xs text-slate-400">Comparação das categorias com maior peso no período.</p>
+        <section className="fc-card p-5">
+          <h2 className="fc-h">Maiores categorias de despesa</h2>
+          <p className="fc-sub mt-1">Comparação das categorias com maior peso no período.</p>
           {expenseDetails.length ? (
             <>
               <div className="mt-4 overflow-x-auto">
                 <div style={{ minWidth: 400 }}>
                   <ResponsiveContainer width="100%" height={Math.max(240, Math.min(expenseDetails.length, 8) * 42 + 45)}>
                     <BarChart data={expenseDetails.slice(0, 8).reverse().map((item) => ({ ...item, label: `${item.name} · ${item.unit}` }))} layout="vertical" margin={{ left: 6, right: 20 }}>
-                      <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="3 3" />
+                      <CartesianGrid horizontal={false} stroke="#ececee" strokeDasharray="3 3" />
                       <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(value: number) => new Intl.NumberFormat("pt-BR", { notation: "compact" }).format(value)} />
                       <YAxis type="category" dataKey="label" width={155} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={{ borderRadius: 12, borderColor: "#e2e8f0" }} />
+                      <Tooltip formatter={(value) => fmt(Number(value))} contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 16px 36px -10px rgb(24 24 27 / 0.18)" }} />
                       <Bar dataKey="total" name="Despesa" radius={[0, 5, 5, 0]} cursor="pointer" onClick={(data: any) => { const it = data?.payload ?? data; openDrill(`${it.name} · ${it.unit}`, entriesByCategory(it)); }}>
                         {expenseDetails.slice(0, 8).reverse().map((item) => <Cell key={item.key} fill={item.color} />)}
                       </Bar>
@@ -2985,42 +3025,42 @@ function Reports({
                   </ResponsiveContainer>
                 </div>
               </div>
-              <div className="mt-5 divide-y divide-slate-100 border-t border-slate-100">
+              <div className="mt-5 divide-y divide-zinc-100 border-t border-zinc-100">
                 {expenseDetails.slice(0, 8).map((item) => (
                   <button
                     key={item.key}
                     type="button"
                     onClick={() => openDrill(`${item.name} · ${item.unit}`, entriesByCategory(item))}
-                    className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left text-xs hover:bg-slate-50"
+                    className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left text-xs hover:bg-zinc-50"
                   >
-                    <span className="font-bold text-slate-800"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name} <span className="font-normal text-slate-400">· {item.unit}</span></span>
-                    <span className="text-slate-500">{item.count} lançamentos · Pago {fmt(item.realized)} · A pagar {fmt(item.pending)}</span>
+                    <span className="font-bold text-zinc-800"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name} <span className="font-normal text-zinc-400">· {item.unit}</span></span>
+                    <span className="text-zinc-500">{item.count} lançamentos · Pago {fmt(item.realized)} · A pagar {fmt(item.pending)}</span>
                   </button>
                 ))}
               </div>
             </>
-          ) : <p className="py-10 text-center text-sm text-slate-400">Sem despesas no período.</p>}
+          ) : <p className="py-10 text-center text-sm text-zinc-400">Sem despesas no período.</p>}
         </section>
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="font-extrabold text-[#191918]">Maiores despesas individuais</h2>
-          <p className="mt-1 text-xs text-slate-400">Lançamentos de maior valor, inclusive parcelas e recorrências.</p>
-          <div className="mt-4 divide-y divide-slate-100">
+        <section className="fc-card p-5">
+          <h2 className="fc-h">Maiores despesas individuais</h2>
+          <p className="fc-sub mt-1">Lançamentos de maior valor, inclusive parcelas e recorrências.</p>
+          <div className="mt-4 divide-y divide-zinc-100">
             {largestExpenses.map((entry) => (
               <button
                 key={entry.id}
                 type="button"
                 onClick={() => openDrill(entry.description || "Lançamento", [entry])}
-                className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-slate-50"
+                className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-zinc-50"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-slate-800" title={entry.description}>{entry.description}</p>
-                  <p className="truncate text-xs text-slate-400">{entry.category} · {entry.unit} · {dateLabel(reportingDate(entry))}</p>
-                  <p className="text-[11px] text-slate-400">{entry.status === "realizado" ? "Pago" : entry.date < todayKey ? "Vencido" : "A pagar"}{entry.installment ? ` · Parcela ${entry.installment}` : entry.recurrence !== "nenhuma" ? ` · Recorrente ${entry.recurrence}` : ""}</p>
+                  <p className="truncate text-sm font-bold text-zinc-800" title={entry.description}>{entry.description}</p>
+                  <p className="truncate text-xs text-zinc-400">{entry.category} · {entry.unit} · {dateLabel(reportingDate(entry))}</p>
+                  <p className="text-[11px] text-zinc-400">{entry.status === "realizado" ? "Pago" : entry.date < todayKey ? "Vencido" : "A pagar"}{entry.installment ? ` · Parcela ${entry.installment}` : entry.recurrence !== "nenhuma" ? ` · Recorrente ${entry.recurrence}` : ""}</p>
                 </div>
                 <b className="shrink-0 text-sm text-red-600">{fmt(entry.amount)}</b>
               </button>
             ))}
-            {!largestExpenses.length && <p className="py-5 text-sm text-slate-400">Sem despesas no período.</p>}
+            {!largestExpenses.length && <p className="py-5 text-sm text-zinc-400">Sem despesas no período.</p>}
           </div>
         </section>
       </div>
@@ -3029,39 +3069,39 @@ function Reports({
         {kind !== "despesa" && <CounterpartyReportPanel kind="receita" entries={filtered} contacts={reportContacts} todayKey={todayKey} onDrill={openDrill} />}
       </div>
       {kind !== "receita" && (
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="font-extrabold text-[#191918]">Juros e atraso</h2>
-          <p className="mt-1 text-xs text-slate-400">Despesas já pagas no período. Clique nos cards para ver o detalhamento.</p>
+        <section className="fc-card p-5">
+          <h2 className="fc-h">Juros e atraso</h2>
+          <p className="fc-sub mt-1">Despesas já pagas no período. Clique nos cards para ver o detalhamento.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => openDrill("Despesas com juros", jurosEntries)}
-              className="rounded-xl border p-4 text-left transition hover:border-red-300 hover:shadow-sm"
+              className="fc-lift rounded-2xl bg-gradient-to-br from-red-50 to-white p-4 text-left ring-1 ring-red-100 hover:shadow-md"
             >
-              <p className="text-xs font-bold text-gray-500">Juros pagos</p>
-              <p className="mt-2 text-2xl font-extrabold text-red-600">{fmt(totalJuros)}</p>
+              <p className="text-xs font-bold text-zinc-500">Juros pagos</p>
+              <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-red-600">{fmt(totalJuros)}</p>
               <p className="mt-1 text-[11px] font-semibold text-brand-700">{jurosEntries.length} despesa(s) · Ver →</p>
             </button>
             <button
               type="button"
               onClick={() => openDrill("Despesas pagas em atraso", lateExpenses)}
-              className="rounded-xl border p-4 text-left transition hover:border-orange-300 hover:shadow-sm"
+              className="fc-lift rounded-2xl bg-gradient-to-br from-orange-50 to-white p-4 text-left ring-1 ring-orange-100 hover:shadow-md"
             >
-              <p className="text-xs font-bold text-gray-500">Pagas em atraso</p>
+              <p className="text-xs font-bold text-zinc-500">Pagas em atraso</p>
               <p className="mt-2 text-2xl font-extrabold text-orange-600">{lateExpenses.length}</p>
               <p className="mt-1 text-[11px] font-semibold text-brand-700">Ver lançamentos →</p>
             </button>
-            <div className="rounded-xl border p-4">
-              <p className="text-xs font-bold text-gray-500">Atraso médio</p>
+            <div className="fc-card-soft p-4">
+              <p className="text-xs font-bold text-zinc-500">Atraso médio</p>
               <p className="mt-2 text-2xl font-extrabold text-[#191918]">{avgLateDays} dia(s)</p>
-              <p className="mt-1 text-[11px] text-slate-400">{totalLateDays} dia(s) no total</p>
+              <p className="mt-1 text-[11px] text-zinc-400">{totalLateDays} dia(s) no total</p>
             </div>
           </div>
         </section>
       )}
       {incomeVisible && (
-      <section className="rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="font-extrabold text-[#191918]">
+      <section className="fc-card p-5">
+        <h2 className="fc-h">
           Saldo final por conta bancária no período
         </h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -3070,12 +3110,14 @@ function Reports({
               key={item.id}
               type="button"
               onClick={() => openDrill(item.name, pick((e) => (e.bankId || "__unassigned__") === item.id && e.status === "realizado"))}
-              className="rounded-xl border p-4 text-left transition hover:border-brand-300 hover:shadow-sm"
+              onPointerMove={spot}
+              className="fc-spot fc-lift group flex flex-col rounded-2xl bg-zinc-50 p-4 text-left ring-1 ring-zinc-100 hover:bg-white hover:shadow-md"
             >
-              <p className="font-bold text-slate-800">{item.name}</p>
-              <p className="text-xs text-gray-400">Saldo anterior mais movimentações realizadas</p>
+              <span className="mb-3"><BankLogo name={item.name} className="h-9 w-9 text-sm" /></span>
+              <p className="font-medium text-[#191918]">{item.name}</p>
+              <p className="text-xs text-zinc-400">Saldo anterior mais movimentações realizadas</p>
               <p
-                className={`mt-3 text-lg font-extrabold ${item.balance >= 0 ? "text-brand-700" : "text-red-600"}`}
+                className={`mt-3 text-xl font-semibold tracking-[-0.03em] ${item.balance >= 0 ? "text-[#191918]" : "text-red-600"}`}
               >
                 {fmt(item.balance)}
               </p>
@@ -3085,40 +3127,40 @@ function Reports({
       </section>
       )}
       {drill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation" onClick={() => setDrill(null)}>
+        <div className="fc-overlay fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4" role="presentation" onClick={() => setDrill(null)}>
           <section
             role="dialog"
             aria-modal="true"
-            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.5rem] bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex items-start justify-between border-b px-6 py-4">
               <div className="min-w-0">
                 <h2 className="truncate font-extrabold text-[#191918]">{drill.title}</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="mt-0.5 text-xs text-zinc-500">
                   {drill.items.length} lançamento(s) · {dateLabel(from)} a {dateLabel(to)}
                 </p>
               </div>
-              <button type="button" onClick={() => setDrill(null)} aria-label="Fechar"><X className="h-5 w-5" /></button>
+              <button type="button" onClick={() => setDrill(null)} aria-label="Fechar" className="rounded-full p-2 text-zinc-500 hover:rotate-90 hover:bg-zinc-100 hover:text-[#191918]"><X className="h-5 w-5" /></button>
             </header>
-            <div className="divide-y divide-slate-100 overflow-y-auto px-6">
+            <div className="divide-y divide-zinc-100 overflow-y-auto px-6">
               {drill.items.map((entry) => (
                 <div key={entry.id} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-slate-800">
+                    <p className="truncate text-sm font-bold text-zinc-800">
                       {entry.description}
-                      {entry.installment && <span className="font-normal text-slate-400"> ({entry.installment})</span>}
+                      {entry.installment && <span className="font-normal text-zinc-400"> ({entry.installment})</span>}
                     </p>
-                    <p className="truncate text-[11px] text-slate-400">
-                      <b className="text-xs font-extrabold text-slate-800">{dateLabel(reportingDate(entry))}</b> · {entry.unit} · {entry.category}
+                    <p className="truncate text-[11px] text-zinc-400">
+                      <b className="text-xs font-extrabold text-zinc-800">{dateLabel(reportingDate(entry))}</b> · {entry.unit} · {entry.category}
                     </p>
                     {entry.beneficiary?.trim() && (
-                      <p className="truncate text-[11px] text-slate-500">
+                      <p className="truncate text-[11px] text-zinc-500">
                         {entry.kind === "despesa" ? "Fornecedor" : "Cliente"}: {entry.beneficiary.trim()}
                       </p>
                     )}
                     {entry.kind === "despesa" && ((entry.juros || 0) > 0 || (entry.discount || 0) > 0 || entry.paidDate) && (
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-zinc-500">
                         {(entry.juros || 0) > 0 && <>Juros <b className="text-red-600">{fmt(entry.juros || 0)}</b> · </>}
                         {(entry.discount || 0) > 0 && <>Desconto <b className="text-emerald-700">{fmt(entry.discount || 0)}</b> · </>}
                         {entry.paidDate && (lateDays(entry) > 0
@@ -3153,14 +3195,14 @@ function Reports({
                     <p className={`text-sm font-extrabold ${entry.kind === "receita" ? "text-emerald-600" : "text-red-600"}`}>
                       {entry.kind === "receita" ? "+" : "-"}{fmt(entryValue(entry))}
                     </p>
-                    <p className="text-[10px] font-bold uppercase text-slate-400">
+                    <p className="text-[10px] font-bold uppercase text-zinc-400">
                       {entry.status === "realizado" ? (entry.kind === "despesa" ? "Pago" : "Recebido") : entry.date < todayKey ? "Vencido" : entry.kind === "despesa" ? "A pagar" : "A receber"}
                     </p>
                   </div>
                 </div>
               ))}
             </div>
-            <footer className="flex items-center justify-between border-t bg-gray-50 px-6 py-3 text-sm font-bold text-slate-700">
+            <footer className="flex items-center justify-between border-t bg-zinc-50 px-6 py-3 text-sm font-bold text-zinc-700">
               <span>Total</span>
               <span>{fmt(drill.items.reduce((sum, entry) => sum + entryValue(entry), 0))}</span>
             </footer>
@@ -3183,6 +3225,7 @@ function App() {
     [editingCenter, setEditingCenter] = useState<CostCenter | null>(null),
     [deletingCenter, setDeletingCenter] = useState<CostCenter | null>(null),
     [editingCategory, setEditingCategory] = useState<Category | null>(null),
+    [dashDrill, setDashDrill] = useState<DrillState | null>(null),
     [deletingCategory, setDeletingCategory] = useState<Category | null>(null),
     [editing, setEditing] = useState<Entry | null>(null),
     [scopeDialog, setScopeDialog] = useState<{
@@ -3687,6 +3730,17 @@ function App() {
     if(entry.creditCardId){setCardFocus({cardId:entry.creditCardId,month:entry.invoiceMonth||entry.date.slice(0,7)});setScreen("cartoes");}
     else if(entry.balanceAdjustment)setScreen("contas");
   };
+  const quickEdit = (x: Entry) => {
+    setDashDrill(null);
+    if (x.balanceAdjustment || x.creditCardId) { openFinancialEntry(x); return; }
+    setEditScope("one");
+    setEditing(x);
+    setModal(x.kind);
+  };
+  const showEntries = (kind: string) => () => {
+    setFilter("Todos"); setCounterpartyFilter("todos"); setSearch(""); setOverdueKind("todos"); setPeriodMode("mes"); setEntryFilter(kind); setScreen("lancamentos");
+  };
+  const drillTo = (title: string, items: Entry[], seeAll?: () => void, subtitle?: string) => setDashDrill({ title, items, seeAll, subtitle });
   const refreshPersonal = async () => {
     const [rows, adjustmentRows, bankRows, cardRows] = await Promise.all([
       readAuthenticatedRows<any>("entries", "date.desc"),
@@ -3942,24 +3996,24 @@ function App() {
   return (
     <div className="flex h-screen overflow-hidden bg-[#f4f4f5]">
       <aside
-        className={`fixed z-30 flex h-full w-64 shrink-0 flex-col bg-[#191918] text-white transition-transform lg:relative ${menu ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+        className={`fixed z-30 fc-grain flex h-full w-64 shrink-0 flex-col bg-[radial-gradient(120%_60%_at_0%_0%,#2a2a2d_0%,#18181b_55%,#0e0e10_100%)] text-white shadow-[inset_-1px_0_0_rgba(255,255,255,0.06)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] lg:relative ${menu ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-6">
+        <div className="relative z-[1] flex items-center justify-between border-b border-white/[0.07] px-4 py-6">
           <div className="min-w-0 flex-1 text-center">
             <img
               src={`${import.meta.env.BASE_URL}fincore-pessoal-logo.svg`}
               alt="FinCore Pessoal"
               className="mx-auto h-14 w-40 object-contain"
             />
-            <p className="mt-1.5 text-xs font-medium text-brand-200/70">
-              PESSOAL · Gestão financeira
+            <p className="mt-1.5 text-[11px] font-medium text-white/40">
+              Gestão financeira pessoal
             </p>
           </div>
           <button className="lg:hidden" onClick={() => setMenu(false)}>
             <X />
           </button>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="relative z-[1] flex-1 space-y-0.5 p-3">
           {nav
             .filter((x) => screenAllowed(x.id))
             .map((x) => (
@@ -3977,36 +4031,44 @@ function App() {
                   }
                   setMenu(false);
                 }}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold ${screen === x.id ? "bg-[#d4d4d4] text-[#191918] shadow-sm" : "text-white/65 hover:bg-white/5 hover:text-[#e5e5e5]"}`}
+                className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium tracking-[-0.01em] ${screen === x.id ? "text-[#191918]" : "text-white/55 hover:bg-white/[0.05] hover:text-white"}`}
               >
-                <x.Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate whitespace-nowrap text-left">{x.text}</span>
+                {screen === x.id && (
+                  <motion.span
+                    layoutId="fc-nav-active"
+                    transition={{ type: "spring", duration: 0.45, bounce: 0.18 }}
+                    className="absolute inset-0 rounded-xl bg-white shadow-[0_10px_28px_-10px_rgba(255,255,255,0.45)]"
+                  />
+                )}
+                <x.Icon className={`relative h-[18px] w-[18px] shrink-0 transition-transform duration-200 ${screen === x.id ? "" : "group-hover:scale-110"}`} />
+                <span className="relative truncate whitespace-nowrap text-left">{x.text}</span>
               </button>
             ))}
         </nav>
-        <div className="border-t border-white/10 p-4">
-          <p className="truncate text-sm font-bold text-white">
+        <div className="relative z-[1] border-t border-white/[0.07] p-4">
+          <div className="mb-3 flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white/20 to-white/5 text-xs font-semibold text-white ring-1 ring-white/10">{currentUser.name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</span><div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-white">
             {currentUser.name}
           </p>
-          <p className="mb-3 truncate text-[11px] text-brand-200/70">
+          <p className="truncate text-[11px] text-white/45">
             {currentUser.email}
-          </p>
+          </p></div></div>
           <button
             onClick={logout}
-            className="w-full rounded-lg border border-white/15 px-2.5 py-2 text-xs font-bold text-brand-100 hover:bg-white/10"
+            className="w-full rounded-lg border border-white/10 px-2.5 py-2 text-xs font-medium text-white/70 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
           >
             Sair da conta
           </button>
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between border-b bg-white px-5 py-3.5">
+        <header className="relative z-20 flex items-center justify-between border-b border-black/[0.06] bg-white/80 px-5 py-3.5 backdrop-blur-xl">
           <div className="flex gap-3">
-            <button className="lg:hidden" onClick={() => setMenu(true)}>
-              <Menu />
+            <button aria-label="Abrir menu" className="rounded-xl p-2 hover:bg-zinc-100 lg:hidden" onClick={() => setMenu(true)}>
+              <Menu className="h-5 w-5" />
             </button>
             <div>
-              <h1 className="font-extrabold text-[#191918]">
+              <h1 className="text-[15px] font-semibold tracking-[-0.02em] text-[#191918]">
                 {screen === "dashboard"
                   ? "Dashboard Financeiro"
                   : screen === "fluxo"
@@ -4025,7 +4087,7 @@ function App() {
                           ? "Relatórios financeiros"
                           : "Lançamentos"}
               </h1>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-zinc-500">
                 {screen === "contas" ? "Cadastre e acompanhe suas contas bancárias" : allowedUnits.map((unit) => unit.name).join(", ") || "Centros de custo"}
               </p>
             </div>
@@ -4035,14 +4097,14 @@ function App() {
               <div className="hidden items-center gap-2 sm:flex">
                 <button
                   onClick={() => open("despesa")}
-                  className="rounded-lg bg-red-50 px-3 py-2 text-xs font-extrabold text-red-600 hover:bg-red-100"
+                  className="rounded-lg bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-600 ring-1 ring-red-600/10 hover:bg-red-100"
                 >
                   − Despesa
                 </button>
                 {isMaster && (
                   <button
                     onClick={() => open("receita")}
-                    className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-emerald-700"
+                    className="rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-[0_6px_16px_-6px_rgba(5,150,105,0.6)] hover:bg-emerald-700"
                   >
                     + Receita
                   </button>
@@ -4055,23 +4117,23 @@ function App() {
                 onClick={() => setNotificationsOpen((open) => !open)}
                 aria-label={`Notificações${pending.length ? `: ${pending.length} pendências` : ""}`}
                 aria-expanded={notificationsOpen}
-                className="relative rounded-lg p-2 text-gray-400 transition hover:bg-slate-100 hover:text-[#191918]"
+                className={`relative rounded-full p-2.5 transition ${notificationsOpen ? "bg-[#191918] text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-[#191918]"}`}
               >
                 <Bell className="h-5 w-5" />
               </button>
               {pending.length > 0 && (
-                <span className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">
+                <span className="fc-ping pointer-events-none absolute right-0.5 top-0.5 isolate flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white ring-2 ring-white">
                   {pending.length}
                 </span>
               )}
               {notificationsOpen && (
-                <section className="absolute right-0 z-40 mt-2 w-[min(24rem,calc(100vw-2.5rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl">
-                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <section className="fc-menu fc-menu-right absolute right-0 z-40 mt-2 w-[min(24rem,calc(100vw-2.5rem))] overflow-hidden rounded-2xl bg-white text-left shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
                     <div>
                       <h2 className="text-sm font-extrabold text-[#191918]">
                         Pendências financeiras
                       </h2>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-zinc-400">
                         Vencidas e com vencimento hoje
                       </p>
                     </div>
@@ -4098,7 +4160,7 @@ function App() {
                               key={entry.id}
                               type="button"
                               onClick={() => openNotification(entry)}
-                              className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-slate-50"
+                              className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-zinc-50"
                             >
                               <span
                                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isOverdue ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}
@@ -4106,10 +4168,10 @@ function App() {
                                 <AlertTriangle className="h-4 w-4" />
                               </span>
                               <span className="min-w-0 flex-1">
-                                <b className="block truncate text-xs text-slate-800">
+                                <b className="block truncate text-xs text-zinc-800">
                                   {entry.description}
                                 </b>
-                                <span className="text-[11px] text-slate-400">
+                                <span className="text-[11px] text-zinc-400">
                                   {isOverdue
                                     ? `Vencida em ${new Date(`${entry.date}T12:00:00`).toLocaleDateString("pt-BR")}`
                                     : "Vence hoje"}
@@ -4129,7 +4191,7 @@ function App() {
                         })}
                     </div>
                   ) : (
-                    <p className="p-5 text-center text-xs font-medium text-slate-400">
+                    <p className="p-5 text-center text-xs font-medium text-zinc-400">
                       Nenhuma pendência para hoje.
                     </p>
                   )}
@@ -4138,156 +4200,209 @@ function App() {
             </div>
           </div>
         </header>
-        <div className={screen === "lancamentos" ? "min-h-0 flex-1 overflow-hidden bg-[#f2f4ef] p-3 sm:p-5" : screen === "cartoes" ? "flex-1 overflow-y-auto bg-[#f2f4ef] p-3 sm:p-5" : "flex-1 overflow-y-auto p-5"}>
+        <div key={screen} className={screen === "lancamentos" ? "min-h-0 flex-1 overflow-hidden p-3 sm:p-5" : screen === "cartoes" ? "fc-screen flex-1 overflow-y-auto p-3 sm:p-5" : "fc-screen flex-1 overflow-y-auto p-4 sm:p-6"}>
           {screen === "dashboard" ? (
             <>
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <h2 className="font-extrabold text-[#191918]">
+                  <h2 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.035em] text-[#191918]">
                     Visão mensal
                   </h2>
-                  <p className="text-xs text-gray-400">
-                    Receitas, despesas e saldos do mês selecionado.
+                  <p className="mt-1 flex items-start gap-2 text-xs text-zinc-500">
+                    <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${syncError ? "bg-red-500" : refreshing ? "animate-pulse bg-amber-500" : "bg-emerald-500"}`} />
+                    <span className={syncError ? "font-medium text-red-600" : ""}>{syncError ? "Não foi possível atualizar os dados. Clique em Atualizar dados para tentar novamente." : lastSync ? `Dados atualizados às ${lastSync}.` : "Carregando atualização dos dados…"}</span>
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3"><Month value={month} move={move} /><button type="button" disabled={refreshing} onClick={() => setSyncVersion(value => value + 1)} className="rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 disabled:opacity-50">{refreshing ? "Atualizando…" : "Atualizar dados"}</button></div>
+                <div className="flex flex-wrap items-center gap-2"><Month value={month} move={move} /><button type="button" disabled={refreshing} onClick={() => setSyncVersion(value => value + 1)} className="group flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-medium text-[#191918] shadow-sm hover:shadow-md disabled:opacity-60"><Repeat2 className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : "transition-transform duration-500 group-hover:rotate-180"}`} />{refreshing ? "Atualizando…" : "Atualizar dados"}</button></div>
               </div>
-              <p className={`mb-4 text-xs ${syncError ? "font-bold text-red-600" : "text-slate-500"}`}>{syncError ? "Não foi possível atualizar os dados. Clique em Atualizar dados para tentar novamente." : lastSync ? `Dados atualizados às ${lastSync}. Compras no cartão por data da compra. Contas a pagar, saldos e atrasos por vencimento/pagamento.` : "Carregando atualização dos dados…"}</p>
               {pending.length > 0 && (
-                <section className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  <b>⚠ Pendências de vencimento: {pending.length}</b>
-                  <span className="ml-2">
+                <button type="button" onClick={() => openOverdue("todos")} className="group mb-5 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-amber-100/80 via-amber-50 to-white p-2.5 pr-4 text-left text-sm text-amber-900 ring-1 ring-amber-200/70 hover:ring-amber-300">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-[0_6px_14px_-6px_rgba(245,158,11,0.9)]"><AlertTriangle className="h-4 w-4" /></span>
+                  <b className="shrink-0 font-semibold">{pending.length} {pending.length === 1 ? "pendência" : "pendências"} de vencimento</b>
+                  <span className="min-w-0 flex-1 truncate text-amber-800/75">
                     {pending
                       .slice(0, 3)
                       .map((x) => x.description)
                       .join(", ")}
                     {pending.length > 3 ? "…" : ""}
                   </span>
-                </section>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-amber-700 transition-transform duration-300 group-hover:translate-x-1" />
+                </button>
               )}
-              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <section className={`grid gap-4 ${isMaster ? "lg:grid-cols-[1.55fr_1fr]" : ""}`}>
+                {isMaster && (
+                  <article className="fc-card-ink fc-grain relative overflow-hidden p-6" aria-label="Posição de caixa mensal">
+                    <div className="relative z-[1] flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-medium text-white/55">Saldo final previsto do mês</p>
+                        <button type="button" title="Ver movimentações do mês" onClick={() => drillTo("Movimentações de caixa do mês", currentDisplay, showEntries("todos"), `Saldo final previsto ${fmt(position.projectedClosing)}`)} className={`group mt-1 flex items-center gap-2 text-left text-[2.6rem] font-semibold leading-none tracking-[-0.045em] ${position.projectedClosing < 0 ? "text-red-400" : "text-white"}`}>
+                          <Money value={position.projectedClosing} /><ChevronRight className="h-6 w-6 text-white/30 transition-all group-hover:translate-x-1 group-hover:text-white" />
+                        </button>
+                        <p className="mt-3 text-xs text-white/50">Resultado das movimentações de caixa do mês: <b className={`font-medium ${cashTotals.balance < 0 ? "text-red-300" : "text-emerald-300"}`}>{fmt(cashTotals.balance)}</b></p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <button type="button" title="Abrir fluxo de caixa" onClick={() => setScreen("fluxo")} className="rounded-2xl bg-white/[0.06] px-4 py-3 text-left ring-1 ring-white/10 hover:bg-white/[0.12]"><p className="text-white/50">Saldo anterior</p><b className="mt-1 block text-sm font-semibold"><Money value={position.opening} /></b></button>
+                        <button type="button" title="Ver movimentações realizadas" onClick={() => drillTo("Realizado no mês", currentDisplay.filter((x) => x.status === "realizado"), showEntries("todos"), `Saldo realizado ${fmt(position.closing)}`)} className="rounded-2xl bg-white/[0.06] px-4 py-3 text-left ring-1 ring-white/10 hover:bg-white/[0.12]"><p className="text-white/50">Realizado no mês</p><b className="mt-1 block text-sm font-semibold"><Money value={position.closing} /></b></button>
+                      </div>
+                    </div>
+                    <div className="relative z-[1] -mx-2 mt-5 h-36" role="img" aria-label="Saldo dia a dia no mês">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={monthCashForecast.months[0].days.map((d) => ({ dia: d.date.slice(8), date: d.date, saldo: d.closing }))} margin={{ top: 6, right: 8, left: 8, bottom: 0 }} className="cursor-pointer" onClick={(state: any) => { const date = state?.activePayload?.[0]?.payload?.date; if (date) drillTo(`Movimentações de ${new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR")}`, currentDisplay.filter((x) => cashDate(x) === date)); }}>
+                          <defs>
+                            <linearGradient id="fc-balance" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#34d399" stopOpacity={0.45} />
+                              <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="dia" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.4)" }} axisLine={false} tickLine={false} interval={4} />
+                          <YAxis hide domain={["dataMin", "dataMax"]} />
+                          <Tooltip cursor={{ stroke: "rgba(255,255,255,0.25)" }} formatter={(value: number) => [fmt(value), "Saldo"]} labelFormatter={(label) => `Dia ${label}`} />
+                          <Area type="monotone" dataKey="saldo" stroke="#34d399" strokeWidth={2} fill="url(#fc-balance)" activeDot={{ r: 4, fill: "#fff", stroke: "#34d399", strokeWidth: 2 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <p className="relative z-[1] mt-2 text-[11px] text-white/40">Saldo dia a dia, com ajustes de saldo. Clique num dia para ver as movimentações.</p>
+                  </article>
+                )}
+                <article className="fc-card flex flex-col p-6">
+                  <h2 className="fc-h">Receitas e consumo do mês</h2>
+                  <p className="fc-sub mt-1">Cartão pela data da compra, parcelas mês a mês, assinaturas em cada cobrança.</p>
+                  <div className="mt-4 space-y-2">
+                    {isMaster && (
+                      <button type="button" onClick={() => drillTo("Receitas do mês", current.filter((x) => x.kind === "receita"), showEntries("todos"), fmt(totals.totalIncome))} className="-mx-2 block w-[calc(100%+1rem)] rounded-xl px-2 py-1.5 text-left hover:bg-zinc-50">
+                        <div className="flex items-baseline justify-between"><span className="flex items-center gap-2 text-xs text-zinc-500"><span className="h-2 w-2 rounded-full bg-emerald-500" />Receitas</span><b className="text-lg font-semibold tracking-[-0.02em] text-emerald-600"><Money value={totals.totalIncome} /></b></div>
+                        <div className="fc-meter mt-2"><span className="bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${Math.max(totals.totalIncome, totals.totalExpense) ? (totals.totalIncome / Math.max(totals.totalIncome, totals.totalExpense)) * 100 : 0}%` }} /></div>
+                      </button>
+                    )}
+                    <button type="button" onClick={() => drillTo("Despesas do mês", current.filter((x) => x.kind === "despesa"), showEntries("todos"), fmt(totals.totalExpense))} className="-mx-2 block w-[calc(100%+1rem)] rounded-xl px-2 py-1.5 text-left hover:bg-zinc-50">
+                      <div className="flex items-baseline justify-between"><span className="flex items-center gap-2 text-xs text-zinc-500"><span className="h-2 w-2 rounded-full bg-red-500" />Despesas</span><b className="text-lg font-semibold tracking-[-0.02em] text-red-600"><Money value={totals.totalExpense} /></b></div>
+                      <div className="fc-meter mt-2"><span className="bg-gradient-to-r from-rose-400 to-red-600" style={{ width: `${Math.max(totals.totalIncome, totals.totalExpense) ? (totals.totalExpense / Math.max(totals.totalIncome, totals.totalExpense)) * 100 : 0}%` }} /></div>
+                    </button>
+                  </div>
+                  {isMaster && (
+                    <div className="mt-auto pt-5">
+                      <div className="fc-card-soft flex items-center justify-between px-4 py-3">
+                        <span className="text-xs text-zinc-500">{totals.totalIncome ? `Você gastou ${Math.round((totals.totalExpense / totals.totalIncome) * 100)}% do que entrou` : "Saldo do mês"}</span>
+                        <b className={`text-sm font-semibold ${totals.totalIncome - totals.totalExpense < 0 ? "text-red-600" : "text-[#191918]"}`}>{fmt(totals.totalIncome - totals.totalExpense)}</b>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              </section>
+              <section className="fc-stagger mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {([
-                  { title: "A pagar hoje", value: payTodayTotal, Icon: CalendarClock, style: "text-orange-600 bg-orange-50", filter: "pagar", today: true },
-                  { title: "Receitas recebidas", value: cashTotals.income, Icon: TrendingUp, style: "text-emerald-600 bg-emerald-50", filter: "recebidas", today: false },
-                  { title: "Despesas pagas", value: cashTotals.expense, Icon: TrendingDown, style: "text-red-600 bg-red-50", filter: "pagas", today: false },
-                  { title: "A pagar", value: cashTotals.pay, Icon: CreditCard, style: "text-orange-600 bg-orange-50", filter: "pagar", today: false },
-                  { title: "A receber", value: cashTotals.receive, Icon: Wallet, style: "text-brand-600 bg-brand-50", filter: "receber", today: false },
+                  { title: "A pagar hoje", value: payTodayTotal, Icon: CalendarClock, style: "from-orange-400 to-orange-600 shadow-orange-500/40", glow: "rgb(249 115 22 / 0.10)", filter: "pagar", today: true },
+                  { title: "Receitas recebidas", value: cashTotals.income, Icon: TrendingUp, style: "from-emerald-400 to-emerald-600 shadow-emerald-500/40", glow: "rgb(16 185 129 / 0.10)", filter: "recebidas", today: false },
+                  { title: "Despesas pagas", value: cashTotals.expense, Icon: TrendingDown, style: "from-rose-400 to-red-600 shadow-red-500/40", glow: "rgb(239 68 68 / 0.10)", filter: "pagas", today: false },
+                  { title: "A pagar", value: cashTotals.pay, Icon: CreditCard, style: "from-amber-400 to-amber-600 shadow-amber-500/40", glow: "rgb(245 158 11 / 0.10)", filter: "pagar", today: false },
+                  { title: "A receber", value: cashTotals.receive, Icon: Wallet, style: "from-zinc-600 to-zinc-900 shadow-zinc-900/30", glow: "rgb(24 24 27 / 0.07)", filter: "receber", today: false },
                 ] as const)
                   .filter((card) => isMaster || (card.filter !== "recebidas" && card.filter !== "receber"))
-                  .map(({ title, value, Icon: CardIcon, style, filter: targetFilter, today: isToday }) => {
+                  .map(({ title, value, Icon: CardIcon, style, glow, filter: targetFilter, today: isToday }) => {
                   return (
                     <button
                       key={title}
                       type="button"
-                      onClick={() => {
-                        if (isToday) {
-                          openPayToday();
-                          return;
-                        }
-                        setFilter("Todos");
-                        setCounterpartyFilter("todos");
-                        setSearch("");
-                        setOverdueKind("todos");
-                        setPeriodMode("mes");
-                        setEntryFilter(targetFilter);
-                        setScreen("lancamentos");
-                      }}
-                      aria-label={`${title}: ${fmt(value)}. Ver lançamentos`}
-                      className="rounded-2xl bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                      onClick={() => drillTo(title, isToday ? payToday : currentDisplay.filter((x) => targetFilter === "pagar" ? x.kind === "despesa" && x.status === "previsto" : targetFilter === "receber" ? x.kind === "receita" && x.status === "previsto" : targetFilter === "pagas" ? x.kind === "despesa" && (x.status === "realizado" || (x.invoicePaidAmount || 0) > 0) : x.kind === "receita" && x.status === "realizado"), isToday ? openPayToday : showEntries(targetFilter), `${fmt(value)} · ${labelMonth(month)}`)}
+                      aria-label={`${title}: ${fmt(value)}. Ver detalhes`}
+                      onPointerMove={spot}
+                      style={{ ["--spot" as string]: glow }}
+                      className="fc-card fc-spot fc-lift group p-5 text-left hover:shadow-lg"
                     >
-                      <div
-                        className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${style}`}
-                      >
-                        <CardIcon className="h-5 w-5" />
+                      <div className="flex items-center justify-between">
+                        <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110 ${style}`}>
+                          <CardIcon className="h-4 w-4" />
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-zinc-300 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-[#191918]" />
                       </div>
-                      <p className="text-xs font-bold text-gray-400">
-                        {title}
+                      <p className="mt-5 text-xs font-medium text-zinc-500">{title}</p>
+                      <p className="mt-1 text-[1.45rem] font-semibold leading-tight tracking-[-0.035em] text-[#191918]">
+                        <Money value={value} />
                       </p>
-                      <p className="mt-1 text-2xl font-extrabold text-[#191918]">
-                        {fmt(value)}
-                      </p>
-                      <p className="mt-2 text-[11px] font-semibold text-brand-700">
+                      <p className="mt-2 text-[11px] text-zinc-400">
                         {isToday
                           ? payToday.length > 0
-                            ? `${payToday.length} conta(s) · Ver →`
-                            : "Nada hoje ✓"
-                          : "Ver lançamentos →"}
+                            ? `${payToday.length} conta(s) para hoje`
+                            : "Nada para hoje"
+                          : "Ver detalhes"}
                       </p>
                     </button>
                   );
                 })}
               </section>
-              <section className="mt-5 rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h2 className="font-extrabold text-[#191918]">
-                      Contas em atraso
-                    </h2>
-                    <p className="text-xs text-gray-400">
-                      Lançamentos previstos cujo vencimento já passou.
-                    </p>
+              <div className="mt-4">
+                <DailyLedger
+                  entries={current}
+                  categories={categories}
+                  banks={banks}
+                  cards={cards}
+                  title={`Diário de ${labelMonth(month)}`}
+                  onOpen={quickEdit}
+                />
+              </div>
+              <section className={`mt-4 grid gap-4 ${isMaster ? "xl:grid-cols-2" : ""}`}>
+                <article className="fc-card p-6">
+                  <div className="mb-5 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h2 className="fc-h">Contas em atraso</h2>
+                      <p className="fc-sub mt-1">Lançamentos previstos cujo vencimento já passou.</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overdue.length ? "bg-red-500 text-white shadow-[0_6px_14px_-6px_rgba(239,68,68,0.9)]" : "bg-emerald-50 text-emerald-700"}`}>
+                      {overdue.length ? `${overdue.length} ${overdue.length === 1 ? "pendência" : "pendências"}` : "Tudo em dia"}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-extrabold text-red-600">
-                    {overdue.length} {overdue.length === 1 ? "pendência" : "pendências"}
-                  </span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => openOverdue("despesa")}
-                    className="rounded-xl border border-red-100 bg-red-50 p-4 text-left transition hover:border-red-200 hover:bg-red-100"
-                  >
-                    <span className="text-xs font-bold text-red-600">
-                      Contas a pagar atrasadas
-                    </span>
-                    <b className="mt-1 block text-xl font-extrabold text-[#191918]">
-                      {fmt(overduePay.reduce((sum, entry) => sum + entry.amount, 0))}
-                    </b>
-                    <span className="mt-1 block text-[11px] font-medium text-red-700">
-                      {overduePay.length} {overduePay.length === 1 ? "lançamento vencido" : "lançamentos vencidos"} · Ver lançamentos
-                    </span>
-                  </button>
-                  {isMaster && (
-                  <button
-                    type="button"
-                    onClick={() => openOverdue("receita")}
-                    className="rounded-xl border border-orange-100 bg-orange-50 p-4 text-left transition hover:border-orange-200 hover:bg-orange-100"
-                  >
-                    <span className="text-xs font-bold text-orange-600">
-                      Contas a receber atrasadas
-                    </span>
-                    <b className="mt-1 block text-xl font-extrabold text-[#191918]">
-                      {fmt(overdueReceive.reduce((sum, entry) => sum + entry.amount, 0))}
-                    </b>
-                    <span className="mt-1 block text-[11px] font-medium text-orange-700">
-                      {overdueReceive.length} {overdueReceive.length === 1 ? "lançamento vencido" : "lançamentos vencidos"} · Ver lançamentos
-                    </span>
-                  </button>
-                  )}
-                </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {([
+                      { kind: "despesa", label: "A pagar atrasadas", items: overduePay, tone: "text-red-600", glow: "rgb(239 68 68 / 0.14)", tile: "from-red-50" },
+                      ...(isMaster ? [{ kind: "receita", label: "A receber atrasadas", items: overdueReceive, tone: "text-orange-600", glow: "rgb(249 115 22 / 0.14)", tile: "from-orange-50" }] : []),
+                    ] as const).map((group) => (
+                      <button
+                        key={group.kind}
+                        type="button"
+                        onClick={() => drillTo(`Contas ${group.label.toLowerCase()}`, group.items, () => openOverdue(group.kind))}
+                        onPointerMove={spot}
+                        style={{ ["--spot" as string]: group.glow }}
+                        className={`fc-spot fc-lift group rounded-2xl bg-gradient-to-br ${group.tile} to-white p-4 text-left ring-1 ring-zinc-200/70 hover:shadow-md`}
+                      >
+                        <span className={`text-xs font-semibold ${group.tone}`}>{group.label}</span>
+                        <b className="mt-1 block text-2xl font-semibold tracking-[-0.03em] text-[#191918]">
+                          <Money value={group.items.reduce((sum, entry) => sum + entry.amount, 0)} />
+                        </b>
+                        <span className="mt-2 flex items-center gap-1 text-[11px] text-zinc-500 group-hover:text-[#191918]">
+                          {group.items.length} {group.items.length === 1 ? "lançamento vencido" : "lançamentos vencidos"}
+                          <ChevronRight className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </article>
+                {isMaster && (
+                  <article className="fc-card p-6">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="fc-h">Contas bancárias</h2>
+                        <p className="fc-sub mt-1">Saldo atual com ajustes e faturas pagas. Previstos não alteram o saldo.</p>
+                      </div>
+                      <button onClick={() => setScreen("contas")} className="shrink-0 rounded-full px-3.5 py-2 text-xs font-medium ring-1 ring-zinc-200 hover:bg-[#191918] hover:text-white hover:ring-[#191918]">Gerenciar</button>
+                    </div>
+                    <div className="divide-y divide-zinc-100">
+                      {banks.map(bank => { const data = summarizeBank(visible.filter(e => cashDate(e) <= today), bank.id); return (
+                        <button type="button" key={bank.id} onClick={() => drillTo(`${bank.name} · ${labelMonth(month)}`, currentDisplay.filter((x) => x.bankId === bank.id), () => setScreen("contas"), `Saldo atual ${fmt(data.balance)}`)} className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-zinc-50">
+                          <BankLogo name={bank.name} className="h-10 w-10 text-base transition-transform duration-300 group-hover:scale-105" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-[#191918]">{bank.name}</span>
+                            <span className="block truncate text-[11px] text-zinc-500">Recebido {fmt(data.income)} · Pago {fmt(data.expense)}</span>
+                          </span>
+                          <b className={`text-sm font-semibold tracking-[-0.02em] ${data.balance < 0 ? "text-red-600" : "text-[#191918]"}`}><Money value={data.balance} /></b>
+                        </button>
+                      ); })}
+                      {!banks.length && <p className="py-4 text-sm text-zinc-500">Nenhuma conta bancária cadastrada. Cadastre as contas que usa para pagar e receber.</p>}
+                    </div>
+                    {visible.some(entry => !entry.bankId && entry.status === "realizado") && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Há movimentações realizadas sem conta bancária informada. Elas aparecem nos totais financeiros, mas não são atribuídas ao saldo de nenhum banco.</p>}
+                  </article>
+                )}
               </section>
-              <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
-                <h2 className="font-extrabold text-[#191918]">Receitas e consumo do mês</h2>
-                <p className="mt-1 text-xs text-slate-500">Compras no cartão pela data da compra; parcelamentos entram uma parcela por mês, a partir dessa data. Assinaturas entram no mês de cada cobrança. Os saldos abaixo seguem o fluxo de caixa.</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  {isMaster && <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Receitas totais do mês</p><b className="text-xl text-emerald-700">{fmt(totals.totalIncome)}</b></div>}
-                  <div className="rounded-xl bg-red-50 p-4"><p className="text-xs font-bold text-red-800">Despesas totais do mês</p><b className="text-xl text-red-700">{fmt(totals.totalExpense)}</b></div>
-                  {isMaster && <div className="rounded-xl bg-brand-50 p-4"><p className="text-xs font-bold text-brand-800">Saldo final previsto do mês</p><b className="text-xl text-brand-700">{fmt(position.projectedClosing)}</b></div>}
-                </div>
-              </section>
-              {isMaster && <section className="mt-5 grid gap-3 sm:grid-cols-3" aria-label="Posição de caixa mensal">
-                {[['Saldo anterior ao mês', position.opening], ['Saldo final realizado do mês', position.closing], ['Saldo final previsto do mês', position.projectedClosing]].map(([title,value]) => <div key={String(title)} className="rounded-2xl bg-white p-5 shadow-sm"><p className="text-xs font-bold text-slate-500">{title}</p><b className="mt-2 block text-xl">{fmt(Number(value))}</b></div>)}
-                <p className="text-xs text-slate-500 sm:col-span-3">Inclui ajustes de saldo. Resultado das movimentações de caixa do mês: {fmt(cashTotals.balance)}. O saldo anterior é transportado entre meses.</p>
-              </section>}
-              {isMaster && <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3"><div><h2 className="font-extrabold text-[#191918]">Contas bancárias</h2><p className="text-xs text-slate-500">Saldo atual com ajustes e pagamentos de faturas. Previstos não alteram o saldo.</p></div><button onClick={() => setScreen("contas")} className="rounded-xl border border-brand-200 px-3 py-2 text-xs font-bold text-brand-700">Gerenciar contas</button></div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {banks.map(bank => { const data = summarizeBank(visible.filter(e => cashDate(e) <= today), bank.id); return <div key={bank.id} className="rounded-xl border p-4"><p className="font-bold">{bank.name}</p><p className={`mt-2 text-xl font-extrabold ${data.balance < 0 ? "text-red-600" : "text-brand-700"}`}>{fmt(data.balance)}</p><p className="mt-1 text-xs text-slate-500">Recebido {fmt(data.income)} · Pago {fmt(data.expense)}</p></div>; })}
-                  {!banks.length && <p className="text-sm text-slate-500">Nenhuma conta bancária cadastrada. Cadastre as contas que usa para pagar e receber.</p>}
-                </div>
-                {visible.some(entry => !entry.bankId && entry.status === "realizado") && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Há movimentações realizadas sem conta bancária informada. Elas aparecem nos totais financeiros, mas não são atribuídas ao saldo de nenhum banco.</p>}
-              </section>}
-              <section className="mt-5 grid gap-4 lg:grid-cols-4">
+              <section className="fc-stagger mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {allowedUnits.map((u) => {
                   const d = current.filter((x) => x.unit === u.name),
                     income = d
@@ -4299,101 +4414,62 @@ function App() {
                       .filter(
                         (x) => x.kind === "despesa" && x.status === "realizado",
                       )
-                      .reduce((s, x) => s + entryValue(x), 0);
+                      .reduce((s, x) => s + entryValue(x), 0),
+                    toPay = d
+                      .filter((x) => x.kind === "despesa" && x.status === "previsto")
+                      .reduce((s, x) => s + x.amount, 0),
+                    toReceive = d
+                      .filter((x) => x.kind === "receita" && x.status === "previsto")
+                      .reduce((s, x) => s + x.amount, 0);
                   return (
-                    <article
-                      key={u.name}
-                      className={`rounded-2xl border p-4 ${u.tint}`}
-                    >
-                      <div className="flex gap-3">
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-xl text-xs font-bold text-white ${u.color}`}
-                        >
+                    <article key={u.name} className="fc-card p-5">
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-xs font-semibold text-white shadow-md ${u.color}`}>
                           {u.initials}
                         </div>
-                        <div>
-                          <h3 className="font-extrabold text-[#191918]">
-                            {u.name}
-                          </h3>
-                          <p className="text-[11px] text-gray-500">
-                            Plano de contas próprio
-                          </p>
+                        <div className="min-w-0">
+                          <h3 className="fc-h truncate">{u.name}</h3>
+                          <p className="text-[11px] text-zinc-500">Centro de custo</p>
                         </div>
                       </div>
-                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                        {isMaster && (
-                          <p>
-                            Receitas recebidas
-                            <b className="block text-emerald-600">
-                              {fmt(income)}
-                            </b>
-                          </p>
-                        )}
-                        <p>
-                          Despesas pagas
-                          <b className="block text-red-600">{fmt(expense)}</b>
-                        </p>
-                        <p>
-                          A pagar
-                          <b className="block text-orange-600">
-                            {fmt(
-                              d
-                                .filter(
-                                  (x) =>
-                                    x.kind === "despesa" &&
-                                    x.status === "previsto",
-                                )
-                                .reduce((s, x) => s + x.amount, 0),
-                            )}
-                          </b>
-                        </p>
-                        {isMaster && (
-                        <p>
-                          A receber
-                          <b className="block text-brand-600">
-                            {fmt(
-                              d
-                                .filter(
-                                  (x) =>
-                                    x.kind === "receita" &&
-                                    x.status === "previsto",
-                                )
-                                .reduce((s, x) => s + x.amount, 0),
-                            )}
-                          </b>
-                        </p>
-                        )}
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
+                        {isMaster && <button type="button" onClick={() => drillTo(`Recebido · ${u.name}`, d.filter((x) => x.kind === "receita" && x.status === "realizado"))} className="fc-card-soft px-3 py-2 text-left hover:bg-white hover:shadow-sm"><span className="block text-zinc-500">Recebido</span><span className="block mt-0.5 text-sm font-semibold text-emerald-600">{fmt(income)}</span></button>}
+                        <button type="button" onClick={() => drillTo(`Pago · ${u.name}`, d.filter((x) => x.kind === "despesa" && x.status === "realizado"))} className="fc-card-soft px-3 py-2 text-left hover:bg-white hover:shadow-sm"><span className="block text-zinc-500">Pago</span><span className="block mt-0.5 text-sm font-semibold text-red-600">{fmt(expense)}</span></button>
+                        <button type="button" onClick={() => drillTo(`A pagar · ${u.name}`, d.filter((x) => x.kind === "despesa" && x.status === "previsto"))} className="fc-card-soft px-3 py-2 text-left hover:bg-white hover:shadow-sm"><span className="block text-zinc-500">A pagar</span><span className="block mt-0.5 text-sm font-semibold text-orange-600">{fmt(toPay)}</span></button>
+                        {isMaster && <button type="button" onClick={() => drillTo(`A receber · ${u.name}`, d.filter((x) => x.kind === "receita" && x.status === "previsto"))} className="fc-card-soft px-3 py-2 text-left hover:bg-white hover:shadow-sm"><span className="block text-zinc-500">A receber</span><span className="block mt-0.5 text-sm font-semibold text-[#191918]">{fmt(toReceive)}</span></button>}
                       </div>
                     </article>
                   );
                 })}
               </section>
-              <section className="mt-5 grid gap-4 lg:grid-cols-2">
+              <section className="mt-4 grid gap-4 lg:grid-cols-2">
                 {isMaster && (
                   <Breakdown
                     kind="receita"
                     entries={current}
                     categories={categories}
+                    onDrill={(title, items) => drillTo(title, items, showEntries("todos"))}
                   />
                 )}
                 <Breakdown
                   kind="despesa"
                   entries={current}
                   categories={categories}
+                  onDrill={(title, items) => drillTo(title, items, showEntries("todos"))}
                 />
               </section>
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <CounterpartyOverview kind="despesa" entries={current} contacts={contacts.filter((contact) => allowedUnits.some((allowed) => allowed.name === contact.unit))} todayKey={today} />
-                {isMaster && <CounterpartyOverview kind="receita" entries={current} contacts={contacts.filter((contact) => allowedUnits.some((allowed) => allowed.name === contact.unit))} todayKey={today} />}
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <CounterpartyOverview kind="despesa" entries={current} contacts={contacts.filter((contact) => allowedUnits.some((allowed) => allowed.name === contact.unit))} todayKey={today} onDrill={(title, items) => drillTo(title, items)} />
+                {isMaster && <CounterpartyOverview kind="receita" entries={current} contacts={contacts.filter((contact) => allowedUnits.some((allowed) => allowed.name === contact.unit))} todayKey={today} onDrill={(title, items) => drillTo(title, items)} />}
               </div>
-              <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
-                <h2 className="font-extrabold text-[#191918]">
-                  Lançamentos de {labelMonth(month)}
-                </h2>
-                <p className="mb-4 text-xs text-gray-400">
-                  Mostrando {Math.min(currentDisplay.length, 5)} de {currentDisplay.length} lançamento(s) do mês, ordenados por vencimento.
-                </p>
-                <button type="button" onClick={() => { setFilter("Todos"); setCounterpartyFilter("todos"); setSearch(""); setEntryFilter("todos"); setPeriodMode("mes"); setScreen("lancamentos"); }} className="mb-4 rounded-xl border border-brand-200 px-3 py-2 text-xs font-bold text-brand-700">Ver todos os {currentDisplay.length} lançamentos do mês</button>
+              <section className="fc-card mt-4 p-6">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="fc-h">Lançamentos de {labelMonth(month)}</h2>
+                    <p className="fc-sub mt-1">Os {Math.min(currentDisplay.length, 5)} mais recentes de {currentDisplay.length}. Clique para editar.</p>
+                  </div>
+                  <button type="button" onClick={() => { setFilter("Todos"); setCounterpartyFilter("todos"); setSearch(""); setEntryFilter("todos"); setPeriodMode("mes"); setScreen("lancamentos"); }} className="group flex items-center gap-1 rounded-full bg-[#191918] px-4 py-2 text-xs font-medium text-white hover:bg-black">Ver todos<ChevronRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" /></button>
+                </div>
                 <Entries
                   entries={[...currentDisplay].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)}
                   categories={categories}
@@ -4465,22 +4541,18 @@ function App() {
                   currentUser.units.includes(entry.unit),
               )}
               banks={banks}
+              cards={cards}
               allowedUnits={allowedUnits}
               categories={categories}
               contacts={contacts.filter((contact) => allowedUnits.some((allowed) => allowed.name === contact.unit))}
               incomeVisible={isMaster}
             />
           ) : screen === "categorias" ? (
-            <section className="rounded-2xl bg-white p-5 shadow-sm">
-              <div className="mb-5 flex flex-wrap justify-between gap-3">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <h2 className="font-extrabold text-[#191918]">
-                    Plano de contas por centro de custo
-                  </h2>
-                  <p className="text-xs text-gray-400">
-                    Cada categoria pertence a uma receita/despesa e a um único
-                    centro.
-                  </p>
+                  <h2 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.035em] text-[#191918]">Plano de contas</h2>
+                  <p className="fc-sub mt-1">Cada categoria pertence a uma receita ou despesa e a um único centro de custo. Clique numa categoria para mudar nome, ícone, foto ou cor.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {canCreatePlans && (
@@ -4488,7 +4560,7 @@ function App() {
                       onClick={() => setCenterModal(true)}
                       disabled={!centerTableReady}
                       title={!centerTableReady ? "Aplique a migração de centros de custo no banco" : undefined}
-                      className="flex items-center gap-1 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700 disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-xs font-medium text-[#191918] shadow-sm hover:shadow-md disabled:opacity-50"
                     >
                       <Plus className="h-4 w-4" />
                       Novo plano / centro
@@ -4496,96 +4568,105 @@ function App() {
                   )}
                   <button
                     onClick={() => setCategoryModal(true)}
-                    className="flex items-center gap-1 rounded-xl bg-brand-700 px-3 py-2 text-xs font-bold text-white"
+                    className="group flex items-center gap-2 rounded-full bg-[#191918] py-1.5 pl-1.5 pr-4 text-xs font-medium text-white shadow-[0_10px_24px_-12px_rgba(24,24,27,0.9)] hover:bg-black"
                   >
-                    <Plus className="h-4 w-4" />
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 transition-transform duration-300 group-hover:rotate-90"><Plus className="h-4 w-4" /></span>
                     Nova categoria
                   </button>
                 </div>
               </div>
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="fc-stagger grid gap-4 xl:grid-cols-2">
                 {byUnit.map((u) => (
-                  <article
-                    key={u.name}
-                    className={`rounded-2xl border p-4 ${u.tint}`}
-                  >
-                    <div className="mb-4 flex items-start gap-3">
-                      <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white ${u.color}`}
-                      >
+                  <article key={u.name} className="fc-card overflow-hidden">
+                    <div className="flex items-center gap-3 border-b border-zinc-100 px-6 py-5">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold text-white shadow-md ${u.color}`}>
                         {u.initials}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-extrabold text-[#191918]">
-                          {u.name}
-                        </h3>
-                        <p className="text-[11px] text-gray-500">
-                          Categorias exclusivas
-                        </p>
+                        <h3 className="fc-h truncate">{u.name}</h3>
+                        <p className="text-[11px] text-zinc-500">{u.categories.length} {u.categories.length === 1 ? "categoria" : "categorias"} · centro de custo</p>
                       </div>
                       {currentUser.role === "master" && (
-                        <div className="flex shrink-0 gap-1 text-xs font-bold">
+                        <div className="flex shrink-0 gap-1 text-xs">
                           <button
                             onClick={() => setEditingCenter(u)}
-                            className="rounded px-1.5 py-1 text-brand-600 hover:bg-brand-50"
+                            className="flex items-center gap-1 rounded-full px-3 py-1.5 font-medium ring-1 ring-zinc-200 hover:bg-zinc-100"
                             aria-label={`Editar plano ${u.name}`}
                           >
-                            Editar
+                            <Pencil className="h-3 w-3" />Editar
                           </button>
                           <button
                             onClick={() => setDeletingCenter(u)}
-                            className="rounded px-1.5 py-1 text-red-600 hover:bg-red-50"
+                            className="rounded-full p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600"
                             aria-label={`Excluir plano ${u.name}`}
+                            title="Excluir plano"
                           >
-                            Excluir
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       )}
                     </div>
-                    {((canCreatePlans ? ["receita", "despesa"] : ["despesa"]) as Kind[]).map((k) => (
-                      <div key={k} className="mb-3">
-                        <p
-                          className={`mb-2 text-[11px] font-extrabold uppercase ${k === "receita" ? "text-emerald-700" : "text-red-700"}`}
-                        >
-                          {k}s
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {u.categories
-                            .filter((c) => c.kind === k)
-                            .map((c) => (
-                              <div
-                                key={c.id}
-                                className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-xs font-bold shadow-sm"
+                    <div className="grid gap-5 p-6">
+                      {((canCreatePlans ? ["receita", "despesa"] : ["despesa"]) as Kind[]).map((k) => {
+                        const list = u.categories.filter((c) => c.kind === k);
+                        return (
+                          <div key={k}>
+                            <p className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-500">
+                              <span className={`h-2 w-2 rounded-full ${k === "receita" ? "bg-emerald-500" : "bg-red-500"}`} />
+                              {k === "receita" ? "Receitas" : "Despesas"}
+                              <span className="text-zinc-300">{list.length}</span>
+                            </p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              {list.map((c) => {
+                                const spent = current.filter((x) => x.unit === c.unit && x.kind === c.kind && x.category === c.name).reduce((sum, x) => sum + entryValue(x), 0);
+                                return (
+                                  <div key={c.id} className="group relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCategory(c)}
+                                      title={`Editar ${c.name}`}
+                                      className="flex w-full items-center gap-3 rounded-2xl bg-zinc-50 p-2.5 pr-8 text-left ring-1 ring-zinc-100 hover:bg-white hover:shadow-md hover:ring-zinc-200"
+                                    >
+                                      <span
+                                        className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-lg ring-1 ring-black/5 transition-transform duration-300 group-hover:scale-105"
+                                        style={{ backgroundColor: c.color || "#e4e4e7" }}
+                                      >
+                                        {c.icon?.startsWith("data:") ? <img src={c.icon} alt="" className="h-full w-full object-cover" /> : c.icon || "🏷️"}
+                                      </span>
+                                      <span className="min-w-0">
+                                        <span className="block truncate text-xs font-medium text-[#191918]">{c.name}</span>
+                                        <span className={`block truncate text-[11px] ${spent ? (k === "receita" ? "text-emerald-600" : "text-red-600") : "text-zinc-400"}`}>{spent ? fmt(spent) : "Sem movimento"}</span>
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeletingCategory(c)}
+                                      className="absolute right-1.5 top-1.5 rounded-full p-1.5 text-zinc-300 hover:bg-red-50 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100"
+                                      aria-label={`Excluir categoria ${c.name}`}
+                                      title="Excluir categoria"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                              <button
+                                type="button"
+                                onClick={() => setCategoryModal(true)}
+                                className="flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-zinc-300 p-2.5 text-xs text-zinc-500 hover:border-[#191918] hover:bg-white hover:text-[#191918]"
                               >
-                                <Icon category={c} small />
-                                <span>{c.name}</span>
-                                <button
-                                  onClick={() => setEditingCategory(c)}
-                                  className="text-brand-600"
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  onClick={() => setDeletingCategory(c)}
-                                  className="rounded px-1.5 py-1 text-red-600 hover:bg-red-50"
-                                  aria-label={`Excluir categoria ${c.name}`}
-                                >
-                                  Excluir
-                                </button>
-                              </div>
-                            ))}
-                          {!u.categories.some((c) => c.kind === k) && (
-                            <span className="text-xs text-gray-400">
-                              Nenhuma categoria
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                                <Plus className="h-3.5 w-3.5" />Nova
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </article>
                 ))}
               </div>
-            </section>
+              <p className="fc-sub px-1">Valores de {labelMonth(month)}.</p>
+            </div>
           ) : (
             <Transactions entries={list} categories={categories} banks={banks} month={month} move={move} isMaster={isMaster}
               actual={monthCashForecast.actual} projected={monthCashClosing}
@@ -4594,6 +4675,8 @@ function App() {
               periodMode={periodMode} setPeriodMode={setPeriodMode} periodFrom={periodFrom} setPeriodFrom={setPeriodFrom} periodTo={periodTo} setPeriodTo={setPeriodTo}
               overdueKind={overdueKind} setOverdueKind={setOverdueKind} settle={settle}
               edit={(x)=>(x.balanceAdjustment||x.creditCardId)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"editar"}):(setEditScope("one"),setEditing(x),setModal(x.kind))}
+              open={(x)=>{if(x.balanceAdjustment||x.creditCardId){openFinancialEntry(x);return;}setEditScope("one");setEditing(x);setModal(x.kind);}}
+              editCategory={canCreatePlans?setEditingCategory:undefined}
               remove={(x)=>(x.balanceAdjustment||x.creditCardId)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"excluir"}):remove(x,"one")}
             />
           )}
@@ -4671,6 +4754,7 @@ function App() {
           }}
         />
       )}{" "}
+      {dashDrill && <EntryDrill drill={dashDrill} categories={categories} banks={banks} cards={cards} close={() => setDashDrill(null)} open={quickEdit} />}
       {editingCategory && (
         <NewCategory
           category={editingCategory}
