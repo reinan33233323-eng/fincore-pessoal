@@ -32,15 +32,17 @@ export function invoiceCycle(month: string, card: Pick<CreditCard,'closing_day'|
 
 export function invoiceMonthSummary(entries:any[],cardId:string,month:string) {
  const rows=entries.filter(e=>e.creditCardId===cardId&&e.invoiceMonth===month);
- const items=rows.filter(e=>!e.cardPayment);
+ const financial=rows.filter(e=>!e.cardPayment);
+ const items=financial.filter(e=>!e.invoiceAdjustment);
+ const adjustments=financial.filter(e=>e.invoiceAdjustment);
  const cents=(e:any)=>Math.round((e.amount+(e.status==='realizado'?(e.juros||0)-(e.discount||0):0))*100);
- const settled=items.filter(e=>e.status==='realizado').reduce((sum,e)=>sum+cents(e),0);
- const open=items.filter(e=>e.status==='previsto').reduce((sum,e)=>sum+cents(e),0);
+ const settled=financial.filter(e=>e.status==='realizado').reduce((sum,e)=>sum+cents(e),0);
+ const open=financial.filter(e=>e.status==='previsto').reduce((sum,e)=>sum+cents(e),0);
  // Open partial payments are credits (negative rows) waiting for the invoice to be settled.
  const credit=rows.filter(e=>e.cardPayment&&e.status==='previsto').reduce((sum,e)=>sum-cents(e),0);
  const partial=rows.filter(e=>e.cardPayment).reduce((sum,e)=>sum-cents(e),0);
- return {items,paid:(settled+credit)/100,pending:(open-credit)/100,total:(settled+open)/100,partial:partial/100,
-  unsettled:items.filter(e=>e.status==='previsto').length};
+ return {items,adjustments,paid:(settled+credit)/100,pending:(open-credit)/100,total:(settled+open)/100,partial:partial/100,
+  unsettled:financial.filter(e=>e.status==='previsto').length};
 }
 
 export type CardPayment = {id:string;card_id:string;invoice_month:string;bank_id:string;amount:number|string;paid_date:string;settled_bank:string|null;settled_date:string|null;notes?:string};

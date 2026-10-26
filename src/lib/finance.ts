@@ -1,6 +1,7 @@
 import { addMonthsClamped } from './seriesDates.ts';
 
 export type FinancialEntry = {
+  invoiceAdjustment?: boolean;
   kind: 'receita' | 'despesa';
   status: 'previsto' | 'realizado';
   amount: number;
@@ -66,5 +67,5 @@ export function reportingDate(entry: FinancialEntry): string {
 }
 
 export function reportingPeriod<T extends FinancialEntry>(entries: T[], from: string, to: string): T[] {
-  return entries.filter(entry => reportingDate(entry) >= from && reportingDate(entry) <= to);
+  return entries.filter(entry => !entry.invoiceAdjustment && reportingDate(entry) >= from && reportingDate(entry) <= to);
 }

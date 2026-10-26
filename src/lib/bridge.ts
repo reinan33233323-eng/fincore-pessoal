@@ -343,3 +343,10 @@ export async function saveCardPurchases(entries:any[]) {
 export async function deleteCardPurchase(id:string) {
  return withFreshSession(()=>supabase.rpc('delete_personal_card_purchase',{target_id:id}));
 }
+
+/** Correct only the invoice's outstanding balance; no payment or bank movement. */
+export async function adjustCardInvoice(cardId:string,month:string,balance:number,expected:number,notes:string) {
+ return withFreshSession(()=>supabase.rpc('adjust_personal_card_invoice',{
+  target_card:cardId,target_month:month,desired_balance:balance,expected_balance:expected,adjustment_notes:notes,
+ }));
+}

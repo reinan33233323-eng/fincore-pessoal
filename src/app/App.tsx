@@ -128,6 +128,7 @@ type Entry = {
   balanceAdjustment?: boolean;
   /** Partial invoice payment rows (see cardPaymentEntries). */
   cardPayment?: boolean;
+  invoiceAdjustment?: boolean;
   cardPaymentId?: string;
   paysCardId?: string;
   paysInvoiceMonth?: string;
@@ -3391,7 +3392,7 @@ function App() {
           paidDate: row.paid_date || undefined,
           discount: row.discount != null ? Number(row.discount) : undefined,
           bankId: row.bank_id === undefined ? undefined : row.bank_id,
-          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset,
+          invoiceAdjustment: row.invoice_adjustment, creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset,
         })) as Entry[];
         // The new registry has its own migration. Until it is applied, the
         // old production database and existing launches must remain readable.
@@ -3491,7 +3492,7 @@ function App() {
           ...row, seriesId: row.series_id || undefined, counterpartyId: row.counterparty_id ?? undefined,
           amount: Number(row.amount), juros: Number(row.juros || 0), paidDate: row.paid_date || undefined,
           discount: Number(row.discount || 0), bankId: row.bank_id ?? null,
-          creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset,
+          invoiceAdjustment: row.invoice_adjustment, creditCardId: row.credit_card_id, invoiceMonth: row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset,
         })) as Entry[]);
         setCards(cardRows); setAdjustments(adjustmentRows);
         const paymentRows = await readCardPayments();
@@ -3688,7 +3689,7 @@ function App() {
     overdueReceive = overdue.filter((x) => x.kind === "receita"),
     cashCurrent = visible.filter((x) => cashDate(x).startsWith(key)),
     // Partial invoice payments are transfers to the card, not spending.
-    current = reportingPeriod(visible.filter((x) => !x.cardPayment), `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
+    current = reportingPeriod(visible.filter((x) => !x.cardPayment && !x.invoiceAdjustment), `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
     currentDisplay = cardInvoices(cashCurrent,cards),
     localDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
@@ -3783,7 +3784,7 @@ function App() {
       readAuthenticatedRows<PersonalCreditCard>("credit_cards", "name.asc"),
     ]);
     setEntries(rows.map(row => ({...row, amount:Number(row.amount), juros:Number(row.juros||0), discount:Number(row.discount||0),
-      paidDate:row.paid_date, bankId:row.bank_id, seriesId:row.series_id, creditCardId:row.credit_card_id, invoiceMonth:row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset})));
+      paidDate:row.paid_date, bankId:row.bank_id, seriesId:row.series_id, invoiceAdjustment:row.invoice_adjustment, creditCardId:row.credit_card_id, invoiceMonth:row.invoice_month, cardPurchaseDate:row.purchase_date, cardInstallmentOffset:row.card_installment_offset})));
     setAdjustments(adjustmentRows); setBanks(bankRows); setCards(cardRows);
     setCardPayments(await readCardPayments());
     setSyncVersion(v=>v+1);
