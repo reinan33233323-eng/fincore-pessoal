@@ -52,3 +52,20 @@ test('an invoice fully covered by partial payments still needs settling to close
   assert.equal(summary.pending, 0);
   assert.equal(summary.unsettled, 1);
 });
+
+
+test('successive partial payments reduce the remaining invoice with exact cents and preserve its history', () => {
+  const purchases = [purchase('nubank', 4162.74)];
+  const first = { ...partial, amount: 1000, paid_date: '2026-10-26' };
+  const second = { ...partial, id: 'p2', amount: 162.74, paid_date: '2026-10-26' };
+  const afterFirst = invoiceMonthSummary([...purchases, ...cardPaymentEntries([first], [card])], 'card', '2026-11');
+  assert.equal(afterFirst.pending, 3162.74);
+  const entries = [...purchases, ...cardPaymentEntries([first, second], [card])];
+  const afterSecond = invoiceMonthSummary(entries, 'card', '2026-11');
+  assert.equal(afterSecond.total, 4162.74);
+  assert.equal(afterSecond.paid, 1162.74);
+  assert.equal(afterSecond.pending, 3000);
+  assert.equal(afterSecond.items[0].status, 'previsto');
+  assert.equal(summarizeBank(entries, 'itau').balance, -1162.74);
+  assert.equal(entries.filter(e => e.cardPayment && !e.creditCardId).length, 2);
+});
