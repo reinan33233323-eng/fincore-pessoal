@@ -1,6 +1,8 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import CreditInvoiceView from './CreditInvoiceView';
+import RecurrenceScopeDialog from './RecurrenceScopeDialog';
+import { seriesTargets, type SeriesScope } from '../lib/seriesScope';
 import { BankPicker } from './BankLogo';
 import { adjustCardInvoice, saveCreditCard, saveCardPurchases, payCreditInvoice, deleteCardPurchase, cancelCardSeries, signedAttachmentUrl, addCardPartialPayment, deleteCardPartialPayment, type Bank } from '../lib/bridge';
 import { invoiceDate, invoiceCycle, invoiceMonthSummary, type CardPayment, type CreditCard } from '../lib/credit';
@@ -14,7 +16,7 @@ const field='mt-1 block w-full rounded-xl border bg-zinc-50 p-2.5 text-sm font-n
 const button='rounded-full bg-[#191918] px-4 py-2.5 hover:bg-black shadow-[0_8px_20px_-10px_rgba(24,24,27,0.8)] text-sm font-bold text-white disabled:opacity-50';
 type Props={categories?:any[];payments?:CardPayment[];cards:CreditCard[];setCards:(fn:(old:CreditCard[])=>CreditCard[])=>void;banks:Bank[];entries:any[];focus?:{cardId:string;month:string}|null;
  onRefresh:()=>Promise<void>;onPlans:()=>void;onEntries:(month:string)=>void;
- renderForm:(editing:any,save:(data:any,scope:'one'|'series',parts?:{date:string;amount:string}[])=>Promise<void>,close:()=>void,card:CreditCard,onDelete?:()=>void)=>ReactNode};
+ renderForm:(editing:any,save:(data:any,scope:'one'|'series',parts?:{date:string;amount:string}[])=>Promise<void>,close:()=>void,card:CreditCard,onDelete:(()=>void)|undefined,scope?:SeriesScope)=>ReactNode};
 export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPlans,onEntries,renderForm,focus,payments=[],categories:categoryDefinitions=[]}:Props) {
  const today=localDateKey(new Date());
  const pendingSave=useRef<{key:string;rows:any[]}|null>(null);
@@ -50,7 +52,7 @@ export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPl
   let rows:any[];
   if(editingPurchase){
    const selected=editingPurchase;
-   const occurrences=scope==='series'&&selected.seriesId?all.filter(e=>e.seriesId===selected.seriesId&&e.status==='previsto'):all.filter(e=>e.id===selected.id&&e.status==='previsto');
+   const occurrences=seriesTargets(all,selected,scope,true);
    if(!occurrences.length)throw new Error('Compras de faturas já pagas são preservadas.');
    const changes=scope==='series'?changedSeriesFields({...selected,date:selected.cardPurchaseDate||selected.date},data,['date']):data;
    const dates=occurrences.map(e=>({...e,date:e.cardPurchaseDate||e.date}));
@@ -102,9 +104,11 @@ export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPl
  await payCreditInvoice(card.id,month,bank,paymentDate);await onRefresh();setPaymentOpen(false);setMessage('Pagamento registrado. O saldo da conta já foi atualizado.');
  });
  // One confirmation dialog for every delete path: row, expanded details and the edit form.
- const [deleting,setDeleting]=useState<any>(null);
- const removeOne=(entry:any)=>void run(async()=>{setDeleting(null);await deleteCardPurchase(entry.id);await onRefresh();setMessage('Compra excluída.');});
- const removeSeries=(entry:any)=>void run(async()=>{setDeleting(null);await cancelCardSeries(entry.seriesId);await onRefresh();setMessage('Série excluída. Compras de faturas já pagas foram mantidas.');});
+ const [deleting,setDeleting]=useState<any>(null),[pendingEdit,setPendingEdit]=useState<any>(null),[editScope,setEditScope]=useState<SeriesScope>('one');
+ const beginEdit=(entry:any,scope:SeriesScope)=>{setPendingEdit(null);setEditScope(scope);setEditingPurchase(entry);setPurchaseOpen(true);};
+ const askEdit=(entry:any)=>{if(entry.seriesId)setPendingEdit(entry);else beginEdit(entry,'one');};
+ const removeOne=async(entry:any)=>{await deleteCardPurchase(entry.id);await onRefresh();setDeleting(null);setMessage('Ocorrência excluída. As demais continuam.');};
+ const removeSeries=async(entry:any)=>{await cancelCardSeries(entry.seriesId);await onRefresh();setDeleting(null);setMessage('Recorrência excluída. Faturas já pagas foram preservadas.');};
  const askDelete=(entry:any)=>{setPurchaseOpen(false);setEditingPurchase(null);setDeleting(entry);};
  const newCard=()=>{setEditing('');setName('');setClosing('25');setDue('5');setCardFormOpen(true);};
  const editCard=()=>{if(card){setEditing(card.id);setName(card.name);setClosing(String(card.closing_day));setDue(String(card.due_day));setCardFormOpen(true);}};
@@ -115,7 +119,7 @@ export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPl
    search={search} setSearch={setSearch} category={category} setCategory={setCategory} center={center} setCenter={setCenter} status={statusFilter} setStatus={setStatusFilter}
    selectCard={value=>{setCardId(value);const selected=cards.find(c=>c.id===value);if(selected)selectMonth(invoiceDate(today,selected).slice(0,7),true);}}
    selectMonth={selectMonth} previous={()=>selectMonth(addMonthsClamped(`${month}-01`,-1).slice(0,7))} next={()=>selectMonth(nextMonth)} current={()=>selectMonth(invoiceDate(today,card).slice(0,7),true)}
-   add={()=>{pendingSave.current=null;setEditingPurchase(null);setPurchaseOpen(true);}} edit={entry=>{setEditingPurchase(entry);setPurchaseOpen(true);}} remove={askDelete} cancel={askDelete}
+   add={()=>{pendingSave.current=null;setEditingPurchase(null);setPurchaseOpen(true);}} edit={askEdit} remove={askDelete} cancel={askDelete}
    attachment={path=>void run(async()=>{window.open(await signedAttachmentUrl(path),'_blank','noopener');})}
    editCard={editCard} addCard={newCard} plans={onPlans} entries={()=>onEntries(month)} pay={()=>{setError('');setPayMode('total');setPaymentOpen(true);}} busy={busy} adjustInvoice={openAdjustment} adjustments={selectedSummary.adjustments} canSettle={unpaid.length>0} partials={partials} removePartial={removePartial}
  />:<section className="mx-auto max-w-[920px] rounded-2xl bg-[#ffffff] p-8 text-center"><h2 className="font-bold">Seus cartões de crédito</h2><p className="mt-2 text-sm text-zinc-500">Cadastre um cartão para lançar compras, assinaturas e parcelamentos.</p><button onClick={newCard} className={`${button} mt-5`}>Cadastrar cartão</button></section>}
@@ -134,16 +138,9 @@ export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPl
    <div className="flex justify-end gap-2"><button type="button" disabled={busy} onClick={()=>setPaymentOpen(false)} className="rounded-full px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-100">Cancelar</button><button disabled={busy||!bank||!paymentDate||(payMode==='total'?!unpaid.length:!partialAmount)} className={button}>{busy?'Registrando…':payMode==='total'?(total>0?`Quitar ${fmt(total)}`:'Quitar fatura'):'Registrar pagamento parcial'}</button></div>
   </form>
  </section></div>}
- {purchaseOpen&&card&&renderForm(editingPurchase?{...editingPurchase,date:editingPurchase.cardPurchaseDate||editingPurchase.date}:null,savePurchase,()=>{setPurchaseOpen(false);setEditingPurchase(null);},card,editingPurchase&&editingPurchase.status==='previsto'?()=>askDelete(editingPurchase):undefined)}
- {deleting&&<div className="fc-overlay fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-[2px]" role="presentation" onClick={()=>setDeleting(null)}><section role="dialog" aria-modal="true" aria-label="Excluir compra do cartão" onClick={e=>e.stopPropagation()} className="w-full max-w-md rounded-[1.5rem] bg-white p-6 shadow-2xl">
-  <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-600"><Trash2 size={18}/></span>
-  <h2 className="text-lg font-semibold tracking-[-0.02em]">Excluir “{deleting.description}”</h2>
-  <p className="mt-1 text-sm text-zinc-500">{deleting.seriesId?(deleting.recurrence!=='nenhuma'?'Esta compra se repete todo mês no cartão.':'Esta compra é parcelada.')+' O que você quer excluir?':'Esta compra em aberto será removida da fatura.'}</p>
-  <div className="mt-5 grid gap-2">
-   <button disabled={busy} onClick={()=>removeOne(deleting)} className="rounded-2xl px-4 py-3 text-left text-sm ring-1 ring-zinc-200 hover:bg-zinc-50 disabled:opacity-50"><b className="block font-medium">{deleting.seriesId?'Só esta compra / parcela':'Excluir compra'}</b><span className="text-xs text-zinc-500">As demais ocorrências continuam.</span></button>
-   {deleting.seriesId&&<button disabled={busy} onClick={()=>removeSeries(deleting)} className="rounded-2xl bg-red-600 px-4 py-3 text-left text-sm text-white shadow-[0_10px_24px_-12px_rgba(220,38,38,0.9)] hover:bg-red-700 disabled:opacity-50"><b className="block font-medium">{deleting.recurrence!=='nenhuma'?'Toda a série (cancelar recorrência)':'Todas as parcelas em aberto'}</b><span className="text-xs text-white/80">Exclui todas as ocorrências em aberto. Compras de faturas já pagas são mantidas.</span></button>}
-   <button onClick={()=>setDeleting(null)} className="mt-1 rounded-full py-2 text-sm text-zinc-500 hover:text-[#191918]">Cancelar</button>
-  </div>
- </section></div>}
+ {purchaseOpen&&card&&renderForm(editingPurchase?{...editingPurchase,date:editingPurchase.cardPurchaseDate||editingPurchase.date}:null,savePurchase,()=>{setPurchaseOpen(false);setEditingPurchase(null);},card,editingPurchase&&editingPurchase.status==='previsto'?()=>askDelete(editingPurchase):undefined,editScope)}
+ {pendingEdit&&<RecurrenceScopeDialog action="editar" entry={pendingEdit} card close={()=>setPendingEdit(null)} one={()=>beginEdit(pendingEdit,'one')} series={()=>beginEdit(pendingEdit,'series')}/>}
+ {deleting&&<RecurrenceScopeDialog action="excluir" entry={deleting} card hasSeries={Boolean(deleting.seriesId)} close={()=>setDeleting(null)} one={()=>removeOne(deleting)} series={()=>removeSeries(deleting)}/>}
+
  </div>;
 }

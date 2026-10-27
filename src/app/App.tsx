@@ -33,6 +33,8 @@ import DailyLedger from "./DailyLedger";
 import BanksSection from "./Banks";
 import CashFlow from "./CashFlow";
 import Transactions from "./Transactions";
+import ScopeDialog from "./RecurrenceScopeDialog";
+import { seriesTargets } from "../lib/seriesScope";
 import { buildCashFlow } from "../lib/cashFlow";
 import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
@@ -449,61 +451,6 @@ function Icon({
     >
       {category?.icon || "🏷️"}
     </span>
-  );
-}
-function ScopeDialog({
-  action,
-  close,
-  one,
-  series,
-}: {
-  action: "editar" | "excluir";
-  close: () => void;
-  one: () => void;
-  series: () => void;
-}) {
-  const verb = action === "editar" ? "alterar" : "excluir";
-  return (
-    <div className="fc-overlay fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[1.5rem] bg-white p-6 shadow-2xl">
-        <div
-          className={`mb-4 flex h-11 w-11 items-center justify-center rounded-full ${action === "excluir" ? "bg-red-100 text-red-600" : "bg-brand-100 text-brand-600"}`}
-        >
-          {action === "excluir" ? "−" : "✎"}
-        </div>
-        <h2 className="text-lg font-extrabold text-[#191918]">
-          {action === "editar"
-            ? "Alterar lançamento recorrente"
-            : "Excluir lançamento recorrente"}
-        </h2>
-        <p className="mt-2 text-sm text-zinc-500">
-          Você quer {verb} somente este lançamento ou todos os lançamentos desta
-          série?
-        </p>
-        <div className="mt-6 grid gap-3">
-          <button
-            onClick={one}
-            className="rounded-xl border border-zinc-200 px-4 py-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50"
-          >
-            Somente este lançamento
-          </button>
-          <button
-            onClick={series}
-            className={`rounded-xl px-4 py-3 text-sm font-bold text-white ${action === "excluir" ? "bg-red-600" : "bg-brand-700"}`}
-          >
-            {action === "editar"
-              ? "Alterar toda a série"
-              : "Excluir toda a série"}
-          </button>
-          <button
-            onClick={close}
-            className="py-1 text-sm font-bold text-zinc-400"
-          >
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 function DeleteCategoryDialog({
@@ -1600,6 +1547,8 @@ export function EntryForm({
         onSubmit={submit}
         className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
       >
+
+
         <header className="flex items-center justify-between border-b px-6 py-4">
           <div>
             <h2 className="fc-h">
@@ -1614,6 +1563,7 @@ export function EntryForm({
           </button>
         </header>
         <div className="space-y-5 p-6">
+          {editing?.seriesId&&<fieldset className="mb-5 grid gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-4"><legend className="px-1 text-sm font-semibold">Alcance da alteração</legend><label className="flex items-center gap-2 text-sm"><input type="radio" name="entry-edit-scope" checked={scope==='one'} onChange={()=>setScope('one')}/>Somente esta ocorrência</label><label className="flex items-center gap-2 text-sm"><input type="radio" name="entry-edit-scope" checked={scope==='series'} onChange={()=>setScope('series')}/>Toda a recorrência{cardMode?' em aberto':''}</label><p className="text-xs text-zinc-500">{scope==='one'?'As demais ocorrências não serão alteradas.':cardMode?'Faturas já pagas são preservadas.':'Cada ocorrência mantém sua própria data e seu histórico de pagamento.'}</p></fieldset>}
           {allowIncome && (
           <div className="grid grid-cols-2 overflow-hidden rounded-xl border text-sm font-bold">
             <button
@@ -1951,6 +1901,7 @@ export function EntryForm({
               <input
                 type="checkbox"
                 checked={recurrence}
+                disabled={Boolean(editing?.seriesId)}
                 onChange={(e) => {
                   setRecurrence(e.target.checked);
                   if (e.target.checked) setInstallments(1);
@@ -1978,27 +1929,6 @@ export function EntryForm({
                   }
                   className="w-16 rounded-lg border bg-white p-1.5 text-center font-normal"
                 />
-              </label>
-            )}
-            {editing?.seriesId && (
-              <label className="col-span-full flex gap-3 text-xs font-bold text-brand-800">
-                Alterar:{" "}
-                <span>
-                  <input
-                    type="radio"
-                    checked={scope === "one"}
-                    onChange={() => setScope("one")}
-                  />{" "}
-                  {cardMode ? "Esta compra" : "Este mês"}
-                </span>
-                <span>
-                  <input
-                    type="radio"
-                    checked={scope === "series"}
-                    onChange={() => setScope("series")}
-                  />{" "}
-                  {cardMode ? "Em aberto da série" : "Toda a série"}
-                </span>
               </label>
             )}
             {(!editing || standaloneEdit) && (!recurrence || frequency === "mensal") && (
@@ -3768,6 +3698,7 @@ function App() {
   const quickEdit = (x: Entry) => {
     setDashDrill(null);
     if (x.balanceAdjustment || x.creditCardId || x.cardPayment) { openFinancialEntry(x); return; }
+    if(x.seriesId){setScopeDialog({entry:x,action:"editar"});return;}
     setEditScope("one");
     setEditing(x);
     setModal(x.kind);
@@ -3820,22 +3751,18 @@ function App() {
       };
       if (editing && !replaced) {
         const isWholeSeries = scope === "series" && Boolean(editing.seriesId);
-        const occurrences = isWholeSeries
-          ? entries.filter((entry) => entry.seriesId === editing.seriesId)
-          : [];
+        const occurrences = seriesTargets(entries,editing,scope);
+        const targetIds = new Set(occurrences.map(entry=>entry.id));
         // A series may contain paid and pending months, or two installments
         // with different amounts. Only propagate fields actually changed in
         // the form; otherwise a due-date correction would overwrite them.
         const seriesChanges = changedSeriesFields<Entry>(editing, data, [
           "date",
           "installment",
+          "paidDate",
         ]);
         const updated = entries.map((x) =>
-          (
-            isWholeSeries
-              ? x.seriesId === editing.seriesId
-              : x.id === editing.id
-          )
+          targetIds.has(x.id)
             ? {
                 ...x,
                 ...(isWholeSeries ? seriesChanges : data),
@@ -3848,9 +3775,7 @@ function App() {
               }
             : x,
         );
-        const changed = updated.filter((x) =>
-          isWholeSeries ? x.seriesId === editing.seriesId : x.id === editing.id,
-        );
+        const changed = updated.filter(x=>targetIds.has(x.id));
         await saveRemoteEntries(changed);
         setEntries(updated);
         void refreshContacts();
@@ -3949,11 +3874,7 @@ function App() {
       setEntries((old) => old.map((v) => (v.id === x.id ? updated : v)));
     },
     remove = async (x: Entry, scope: "one" | "series" = "one") => {
-      const removed = entries.filter((v) =>
-        scope === "series" && x.seriesId
-          ? v.seriesId === x.seriesId
-          : v.id === x.id,
-      );
+      const removed = seriesTargets(entries,x,scope);
       if (scope === "series" && x.seriesId)
         await deleteRemoteEntrySeries(x.seriesId);
       else await deleteRemoteEntries(removed.map((entry) => entry.id));
@@ -4518,7 +4439,7 @@ function App() {
                   }
                   open={(x) => {
                     if (x.balanceAdjustment || x.creditCardId || x.cardPayment) { openFinancialEntry(x); return; }
-                    // Atalho: edita só este mês, sem perguntar "Este mês / Toda a série".
+                    if(x.seriesId){setScopeDialog({entry:x,action:"editar"});return;}
                     setEditScope("one");
                     setEditing(x);
                     setModal(x.kind);
@@ -4537,7 +4458,7 @@ function App() {
             <CashFlow entries={visible} banks={banks} cards={cards} onRefresh={refreshPersonal} onAccounts={()=>setScreen("contas")} />
           ) : screen === "cartoes" ? (
             <CreditCards categories={categories} key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={[...entries, ...cardPaymentEntries(cardPayments, cards)]} payments={cardPayments} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")} onEntries={(invoiceMonth)=>{setMonth(new Date(`${invoiceMonth}-01T12:00:00`));setSearch("");setFilter("Todos");setEntryFilter("todos");setPeriodMode("mes");setCounterpartyFilter("todos");setOverdueKind("todos");setScreen("lancamentos");}}
-              renderForm={(purchase,savePurchase,close,card,onDelete)=><EntryForm onDelete={onDelete} kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}
+              renderForm={(purchase,savePurchase,close,card,onDelete,scope)=><EntryForm key={`${purchase?.id||'new'}:${scope||'one'}`} scope={scope} onDelete={onDelete} kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}
             />
           ) : screen === "contatos" ? (
             <ContactsScreen
@@ -4711,7 +4632,7 @@ function App() {
               periodMode={periodMode} setPeriodMode={setPeriodMode} periodFrom={periodFrom} setPeriodFrom={setPeriodFrom} periodTo={periodTo} setPeriodTo={setPeriodTo}
               overdueKind={overdueKind} setOverdueKind={setOverdueKind} settle={settle}
               edit={(x)=>(x.balanceAdjustment||x.creditCardId||x.cardPayment)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"editar"}):(setEditScope("one"),setEditing(x),setModal(x.kind))}
-              open={(x)=>{if(x.balanceAdjustment||x.creditCardId||x.cardPayment){openFinancialEntry(x);return;}setEditScope("one");setEditing(x);setModal(x.kind);}}
+              open={(x)=>{if(x.balanceAdjustment||x.creditCardId||x.cardPayment){openFinancialEntry(x);return;}if(x.seriesId){setScopeDialog({entry:x,action:"editar"});return;}setEditScope("one");setEditing(x);setModal(x.kind);}}
               editCategory={canCreatePlans?setEditingCategory:undefined}
               remove={(x)=>x.cardPayment?removeCardPayment(x):(x.balanceAdjustment||x.creditCardId||x.cardPayment)?openFinancialEntry(x):x.seriesId?setScopeDialog({entry:x,action:"excluir"}):remove(x,"one")}
             />
@@ -4763,10 +4684,11 @@ function App() {
       {scopeDialog && (
         <ScopeDialog
           action={scopeDialog.action}
+          entry={scopeDialog.entry}
           close={() => setScopeDialog(null)}
-          one={() => {
+          one={async () => {
             const d = scopeDialog;
-            if (d.action === "excluir") remove(d.entry, "one");
+            if (d.action === "excluir") await remove(d.entry, "one");
             else {
               setEditScope("one");
               setEditing(d.entry);
@@ -4774,9 +4696,9 @@ function App() {
             }
             setScopeDialog(null);
           }}
-          series={() => {
+          series={async () => {
             const d = scopeDialog;
-            if (d.action === "excluir") remove(d.entry, "series");
+            if (d.action === "excluir") await remove(d.entry, "series");
             else {
               setEditScope("series");
               setEditing(d.entry);
