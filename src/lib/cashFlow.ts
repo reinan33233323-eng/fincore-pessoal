@@ -67,3 +67,11 @@ export function buildCashFlow(entries: Source[], bankIds: string[], cards: {id:s
  }
  return {actual:actual/100,overdueIncome:overdueIncome/100,overdueExpense:overdueExpense/100,months};
 }
+
+/** Dashboard figures come from the same monthly ledger shown in CashFlow. */
+export function summarizeCashMonth(month:CashMonth){
+ const cents=(value:number)=>Math.round(value*100);
+ return {opening:month.opening,closing:month.closing,
+  realized:(cents(month.income)-cents(month.expense))/100,
+  movement:(cents(month.closing)-cents(month.opening))/100};
+}

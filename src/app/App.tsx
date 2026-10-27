@@ -35,7 +35,7 @@ import CashFlow from "./CashFlow";
 import Transactions from "./Transactions";
 import ScopeDialog from "./RecurrenceScopeDialog";
 import { seriesTargets } from "../lib/seriesScope";
-import { buildCashFlow } from "../lib/cashFlow";
+import { buildCashFlow, summarizeCashMonth } from "../lib/cashFlow";
 import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
 import { renamedCategoryEntries, categorySelection } from "../lib/categories";
@@ -3612,7 +3612,8 @@ function App() {
     ),
     invoiceDisplay = cardInvoices(visible,cards),
     monthCashForecast = buildCashFlow(visible,banks.map(bank=>bank.id),cards,key,1,today),
-    monthCashClosing = monthCashForecast.months[0].closing,
+    monthCashSummary = summarizeCashMonth(monthCashForecast.months[0]),
+    monthCashClosing = monthCashSummary.closing,
     pending = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date <= today),cards),
     overdue = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date < today),cards),
     overduePay = overdue.filter((x) => x.kind === "despesa"),
@@ -3650,7 +3651,6 @@ function App() {
     payTodayTotal = payToday.reduce((s, x) => s + x.amount, 0),
     totals = summarizeFinancialEntries(current),
     cashTotals = summarizeFinancialEntries(cashCurrent),
-    position = cashPosition(visible, `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
     move = (n: number) =>
       setMonth((v) => new Date(v.getFullYear(), v.getMonth() + n, 1)),
     openOverdue = (kind: Kind | "todos" = "todos") => {
@@ -4192,19 +4192,19 @@ function App() {
                     <div className="relative z-[1] flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="text-xs font-medium text-white/55">Saldo final previsto do mês</p>
-                        <button type="button" title="Ver movimentações do mês" onClick={() => drillTo("Movimentações de caixa do mês", currentDisplay, showEntries("todos"), `Saldo final previsto ${fmt(position.projectedClosing)}`)} className={`group mt-1 flex items-center gap-2 text-left text-[2.6rem] font-semibold leading-none tracking-[-0.045em] ${position.projectedClosing < 0 ? "text-red-400" : "text-white"}`}>
-                          <Money value={position.projectedClosing} /><ChevronRight className="h-6 w-6 text-white/30 transition-all group-hover:translate-x-1 group-hover:text-white" />
+                        <button type="button" title="Ver este mês no fluxo de caixa" onClick={() => setScreen("fluxo")} className={`group mt-1 flex items-center gap-2 text-left text-[2.6rem] font-semibold leading-none tracking-[-0.045em] ${monthCashSummary.closing < 0 ? "text-red-400" : "text-white"}`}>
+                          <Money value={monthCashSummary.closing} /><ChevronRight className="h-6 w-6 text-white/30 transition-all group-hover:translate-x-1 group-hover:text-white" />
                         </button>
-                        <p className="mt-3 text-xs text-white/50">Resultado das movimentações de caixa do mês: <b className={`font-medium ${cashTotals.balance < 0 ? "text-red-300" : "text-emerald-300"}`}>{fmt(cashTotals.balance)}</b></p>
+                        <p className="mt-3 text-xs text-white/50">Movimentação líquida prevista no mês: <b className={`font-medium ${monthCashSummary.movement < 0 ? "text-red-300" : "text-emerald-300"}`}>{fmt(monthCashSummary.movement)}</b></p>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <button type="button" title="Abrir fluxo de caixa" onClick={() => setScreen("fluxo")} className="rounded-2xl bg-white/[0.06] px-4 py-3 text-left ring-1 ring-white/10 hover:bg-white/[0.12]"><p className="text-white/50">Saldo anterior</p><b className="mt-1 block text-sm font-semibold"><Money value={position.opening} /></b></button>
-                        <button type="button" title="Ver movimentações realizadas" onClick={() => drillTo("Realizado no mês", currentDisplay.filter((x) => x.status === "realizado"), showEntries("todos"), `Saldo realizado ${fmt(position.closing)}`)} className="rounded-2xl bg-white/[0.06] px-4 py-3 text-left ring-1 ring-white/10 hover:bg-white/[0.12]"><p className="text-white/50">Realizado no mês</p><b className="mt-1 block text-sm font-semibold"><Money value={position.closing} /></b></button>
+                        <button type="button" title="Abrir fluxo de caixa" onClick={() => setScreen("fluxo")} className="rounded-2xl bg-white/[0.06] px-4 py-3 text-left ring-1 ring-white/10 hover:bg-white/[0.12]"><p className="text-white/50">Saldo inicial do mês</p><b className="mt-1 block text-sm font-semibold"><Money value={monthCashSummary.opening} /></b></button>
+                        <button type="button" title="Ver movimentações realizadas no fluxo de caixa" onClick={() => setScreen("fluxo")} className="rounded-2xl bg-white/[0.06] px-4 py-3 text-left ring-1 ring-white/10 hover:bg-white/[0.12]"><p className="text-white/50">Realizado no mês</p><b className="mt-1 block text-sm font-semibold"><Money value={monthCashSummary.realized} /></b></button>
                       </div>
                     </div>
                     <div className="relative z-[1] -mx-2 mt-5 h-36" role="img" aria-label="Saldo dia a dia no mês">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={monthCashForecast.months[0].days.map((d) => ({ dia: d.date.slice(8), date: d.date, saldo: d.closing }))} margin={{ top: 6, right: 8, left: 8, bottom: 0 }} className="cursor-pointer" onClick={(state: any) => { const date = state?.activePayload?.[0]?.payload?.date; if (date) drillTo(`Movimentações de ${new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR")}`, currentDisplay.filter((x) => cashDate(x) === date)); }}>
+                        <AreaChart data={monthCashForecast.months[0].days.map((d) => ({ dia: d.date.slice(8), date: d.date, saldo: d.closing }))} margin={{ top: 6, right: 8, left: 8, bottom: 0 }} className="cursor-pointer" onClick={() => setScreen("fluxo")}>
                           <defs>
                             <linearGradient id="fc-balance" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#34d399" stopOpacity={0.45} />
@@ -4218,7 +4218,7 @@ function App() {
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                    <p className="relative z-[1] mt-2 text-[11px] text-white/40">Saldo dia a dia, com ajustes de saldo. Clique num dia para ver as movimentações.</p>
+                    <p className="relative z-[1] mt-2 text-[11px] text-white/40">Saldo dia a dia, com ajustes de saldo. Clique para abrir este mês no fluxo de caixa.</p>
                   </article>
                 )}
                 <article className="fc-card flex flex-col p-6">
@@ -4455,7 +4455,7 @@ function App() {
           ) : screen === "contas" ? (
             <BanksSection banks={banks} ready={banksReady} canManage={isMaster} entries={visible} setBanks={setBanks} onRefresh={refreshPersonal} />
           ) : screen === "fluxo" && isMaster ? (
-            <CashFlow entries={visible} banks={banks} cards={cards} onRefresh={refreshPersonal} onAccounts={()=>setScreen("contas")} />
+            <CashFlow initialMonth={key} entries={visible} banks={banks} cards={cards} onRefresh={refreshPersonal} onAccounts={()=>setScreen("contas")} />
           ) : screen === "cartoes" ? (
             <CreditCards categories={categories} key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={[...entries, ...cardPaymentEntries(cardPayments, cards)]} payments={cardPayments} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")} onEntries={(invoiceMonth)=>{setMonth(new Date(`${invoiceMonth}-01T12:00:00`));setSearch("");setFilter("Todos");setEntryFilter("todos");setPeriodMode("mes");setCounterpartyFilter("todos");setOverdueKind("todos");setScreen("lancamentos");}}
               renderForm={(purchase,savePurchase,close,card,onDelete,scope)=><EntryForm key={`${purchase?.id||'new'}:${scope||'one'}`} scope={scope} onDelete={onDelete} kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}

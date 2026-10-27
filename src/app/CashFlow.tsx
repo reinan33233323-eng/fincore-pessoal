@@ -9,9 +9,9 @@ import { Money, fmt, labelMonth } from './shared';
 const monthLabel=(month:string)=>labelMonth(new Date(`${month}-01T12:00:00`));
 const dateLabel=(date:string)=>date.split('-').reverse().join('/');
 const field='mt-1 block rounded-full border bg-white px-3.5 py-2 text-sm font-normal shadow-sm';
-export default function CashFlow({entries,banks,cards,onRefresh,onAccounts}:{entries:any[];banks:{id:string;name:string}[];cards:{id:string;name:string}[];onRefresh:()=>Promise<void>;onAccounts:()=>void}){
+export default function CashFlow({entries,banks,cards,onRefresh,onAccounts,initialMonth}:{initialMonth?:string;entries:any[];banks:{id:string;name:string}[];cards:{id:string;name:string}[];onRefresh:()=>Promise<void>;onAccounts:()=>void}){
  const today=localDateKey(new Date());
- const [start,setStart]=useState(localMonthKey(new Date())),[count,setCount]=useState(12),[selected,setSelected]=useState(start),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [start,setStart]=useState(initialMonth||localMonthKey(new Date())),[count,setCount]=useState(12),[selected,setSelected]=useState(start),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const flow=useMemo(()=>buildCashFlow(entries,banks.map(b=>b.id),cards,start,count,today),[entries,banks,cards,start,count,today]);
  const current=flow.months.find(m=>m.month===selected)||flow.months[0];
  const lowest=flow.months.flatMap(m=>m.days).reduce((min,d)=>d.closing<min.closing?d:min,flow.months[0].days[0]);

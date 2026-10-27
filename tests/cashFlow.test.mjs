@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCashFlow, cashMovementRows } from '../src/lib/cashFlow.ts';
+import { buildCashFlow, cashMovementRows, summarizeCashMonth } from '../src/lib/cashFlow.ts';
 const settled=(amount,date='2026-10-15',kind='receita',extra={})=>({kind,status:'realizado',amount,date,bankId:'itau',...extra});
 const pending=(amount,date,kind='despesa',extra={})=>({kind,status:'previsto',amount,date,...extra});
 const build=(entries,start='2026-10',count=3)=>buildCashFlow(entries,['itau'],[{id:'card',name:'Nubank'}],start,count,'2026-10-15');
@@ -72,4 +72,30 @@ test('movement ledger carries adjusted bank balance and consolidates card purcha
  const rows=cashMovementRows(flow.months[1]);
  assert.equal(rows.length,1);assert.equal(rows[0].amount,118.90);assert.equal(rows[0].balance,681.10);
  assert.equal(rows[0].balance,flow.months[1].closing);
+});
+
+
+test('dashboard month summary matches the accumulated cash flow when earlier months still have pending movements',()=>{
+ const entries=[settled(1000,'2026-10-01'),pending(200,'2026-11-10'),pending(500,'2026-12-10','receita')];
+ const full=build(entries,'2026-10',3);
+ const selected=build(entries,'2026-12',1);
+ const dashboard=summarizeCashMonth(selected.months[0]);
+ assert.deepEqual(dashboard,{opening:800,closing:1300,realized:0,movement:500});
+ assert.equal(dashboard.opening,full.months[2].opening);
+ assert.equal(dashboard.closing,full.months[2].closing);
+ assert.equal(selected.months[0].days.at(-1).closing,dashboard.closing);
+});
+test('realized in the month excludes the previous balance, forecasts and bank balance adjustments',()=>{
+ const entries=[settled(1000,'2026-09-01'),settled(300,'2026-10-10'),settled(50,'2026-10-12','despesa'),settled(100,'2026-10-15','receita',{balanceAdjustment:true}),pending(20,'2026-10-20')];
+ assert.deepEqual(summarizeCashMonth(build(entries,'2026-10',1).months[0]),{opening:1000,closing:1330,realized:250,movement:330});
+ const empty=summarizeCashMonth(build([settled(1000,'2026-09-01')],'2026-10',1).months[0]);
+ assert.deepEqual(empty,{opening:1000,closing:1000,realized:0,movement:0});
+});
+test('selected month and range have identical forecasts across year boundaries and overdue items',()=>{
+ const entries=[settled(1000,'2026-09-01'),pending(50,'2026-09-20'),pending(150,'2026-12-23'),pending(300,'2027-01-10','receita'),settled(500,'2026-10-05','receita',{bankId:null})];
+ const full=build(entries,'2026-10',4);
+ for(const expected of full.months){
+  const selected=build(entries,expected.month,1).months[0];
+  assert.deepEqual(summarizeCashMonth(selected),summarizeCashMonth(expected));
+ }
 });
