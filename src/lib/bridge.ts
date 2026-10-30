@@ -320,10 +320,10 @@ export async function deleteBank(id: string) {
 export async function saveCreditCard(card: import('./credit').CreditCard) {
  return withFreshSession(() => supabase.from('credit_cards').upsert(card).select('*').single()) as Promise<import('./credit').CreditCard>;
 }
-export async function payCreditInvoice(cardId:string, month:string, bankId:string, date:string) {
+export async function payCreditInvoice(cardId:string, month:string, bankId:string|null, date:string) {
  return withFreshSession(() => supabase.rpc('pay_personal_card_invoice',{target_card:cardId,target_month:month,target_bank:bankId,payment_date:date}));
 }
-export async function addCardPartialPayment(cardId:string, month:string, bankId:string, amount:number, date:string) {
+export async function addCardPartialPayment(cardId:string, month:string, bankId:string|null, amount:number, date:string) {
  return withFreshSession(() => supabase.rpc('add_personal_card_partial_payment',{target_card:cardId,target_month:month,target_bank:bankId,payment_amount:amount,payment_date:date}));
 }
 export async function deleteCardPartialPayment(id:string) {

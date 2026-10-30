@@ -35,6 +35,7 @@ import CashFlow from "./CashFlow";
 import Transactions from "./Transactions";
 import ScopeDialog from "./RecurrenceScopeDialog";
 import { seriesTargets } from "../lib/seriesScope";
+import { balanceCardEntries } from "../lib/cardBalance";
 import { buildCashFlow, summarizeCashMonth } from "../lib/cashFlow";
 import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
@@ -2574,7 +2575,7 @@ function Reports({
       (kind === "todos" || contact.kind === kind),
     )
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  const cashEntries = entries;
+  const cashEntries = balanceCardEntries(entries,cards);
   const filtered = reportingPeriod(entries, from, to).filter(
     (entry) =>
       (unit === "Todos" || entry.unit === unit) &&
@@ -3610,6 +3611,7 @@ function App() {
       (x) =>
         currentUser.role === "master" || currentUser.units.includes(x.unit),
     ),
+    balanceVisible = balanceCardEntries(visible,cards),
     invoiceDisplay = cardInvoices(visible,cards),
     monthCashForecast = buildCashFlow(visible,banks.map(bank=>bank.id),cards,key,1,today),
     monthCashSummary = summarizeCashMonth(monthCashForecast.months[0]),
@@ -4343,8 +4345,8 @@ function App() {
                       <button onClick={() => setScreen("contas")} className="shrink-0 rounded-full px-3.5 py-2 text-xs font-medium ring-1 ring-zinc-200 hover:bg-[#191918] hover:text-white hover:ring-[#191918]">Gerenciar</button>
                     </div>
                     <div className="divide-y divide-zinc-100">
-                      {banks.map(bank => { const data = summarizeBank(visible.filter(e => cashDate(e) <= today), bank.id); return (
-                        <button type="button" key={bank.id} onClick={() => drillTo(`${bank.name} · ${labelMonth(month)}`, currentDisplay.filter((x) => x.bankId === bank.id), () => setScreen("contas"), `Saldo atual ${fmt(data.balance)}`)} className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-zinc-50">
+                      {banks.map(bank => { const data = summarizeBank(balanceVisible.filter(e => cashDate(e) <= today), bank.id); return (
+                        <button type="button" key={bank.id} onClick={() => drillTo(`${bank.name} · ${labelMonth(month)}`, cardInvoices(balanceCardEntries(cashCurrent,cards),cards).filter((x) => x.bankId === bank.id), () => setScreen("contas"), `Saldo atual ${fmt(data.balance)}`)} className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-zinc-50">
                           <BankLogo name={bank.name} className="h-10 w-10 text-base transition-transform duration-300 group-hover:scale-105" />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium text-[#191918]">{bank.name}</span>
@@ -4355,7 +4357,7 @@ function App() {
                       ); })}
                       {!banks.length && <p className="py-4 text-sm text-zinc-500">Nenhuma conta bancária cadastrada. Cadastre as contas que usa para pagar e receber.</p>}
                     </div>
-                    {visible.some(entry => !entry.bankId && entry.status === "realizado") && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Há movimentações realizadas sem conta bancária informada. Elas aparecem nos totais financeiros, mas não são atribuídas ao saldo de nenhum banco.</p>}
+                    {balanceVisible.some(entry => !entry.bankId && entry.status === "realizado") && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Há movimentações realizadas sem conta bancária informada. Elas aparecem nos totais financeiros, mas não são atribuídas ao saldo de nenhum banco.</p>}
                   </article>
                 )}
               </section>
@@ -4453,7 +4455,7 @@ function App() {
               </section>
             </>
           ) : screen === "contas" ? (
-            <BanksSection banks={banks} ready={banksReady} canManage={isMaster} entries={visible} setBanks={setBanks} onRefresh={refreshPersonal} />
+            <BanksSection banks={banks} ready={banksReady} canManage={isMaster} entries={balanceVisible} setBanks={setBanks} onRefresh={refreshPersonal} />
           ) : screen === "fluxo" && isMaster ? (
             <CashFlow initialMonth={key} entries={visible} banks={banks} cards={cards} onRefresh={refreshPersonal} onAccounts={()=>setScreen("contas")} />
           ) : screen === "cartoes" ? (

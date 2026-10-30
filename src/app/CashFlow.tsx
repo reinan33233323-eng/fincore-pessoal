@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import BankLogo from './BankLogo';
+import { balanceCardEntries } from '../lib/cardBalance';
 import { buildCashFlow, cashMovementRows } from '../lib/cashFlow';
 import { localDateKey, localMonthKey, summarizeBank } from '../lib/finance';
 import { Money, fmt, labelMonth } from './shared';
@@ -9,14 +10,14 @@ import { Money, fmt, labelMonth } from './shared';
 const monthLabel=(month:string)=>labelMonth(new Date(`${month}-01T12:00:00`));
 const dateLabel=(date:string)=>date.split('-').reverse().join('/');
 const field='mt-1 block rounded-full border bg-white px-3.5 py-2 text-sm font-normal shadow-sm';
-export default function CashFlow({entries,banks,cards,onRefresh,onAccounts,initialMonth}:{initialMonth?:string;entries:any[];banks:{id:string;name:string}[];cards:{id:string;name:string}[];onRefresh:()=>Promise<void>;onAccounts:()=>void}){
+export default function CashFlow({entries,banks,cards,onRefresh,onAccounts,initialMonth}:{initialMonth?:string;entries:any[];banks:{id:string;name:string}[];cards:{id:string;name:string;include_in_balance?:boolean}[];onRefresh:()=>Promise<void>;onAccounts:()=>void}){
  const today=localDateKey(new Date());
  const [start,setStart]=useState(initialMonth||localMonthKey(new Date())),[count,setCount]=useState(12),[selected,setSelected]=useState(start),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const flow=useMemo(()=>buildCashFlow(entries,banks.map(b=>b.id),cards,start,count,today),[entries,banks,cards,start,count,today]);
  const current=flow.months.find(m=>m.month===selected)||flow.months[0];
  const lowest=flow.months.flatMap(m=>m.days).reduce((min,d)=>d.closing<min.closing?d:min,flow.months[0].days[0]);
  const refresh=async()=>{setBusy(true);setError('');try{await onRefresh();}catch{setError('Não foi possível atualizar. Tente novamente.');}finally{setBusy(false);}};
- const actualEntries=entries.filter(e=>e.status==='realizado'&& (e.paidDate||e.date)<=today);
+ const actualEntries=balanceCardEntries(entries,cards).filter(e=>e.status==='realizado'&& (e.paidDate||e.date)<=today);
  const movements=cashMovementRows(current);
  const end=flow.months.at(-1)!;
  const tip={borderRadius:12,border:'none',boxShadow:'0 16px 36px -10px rgb(24 24 27 / 0.18)'};

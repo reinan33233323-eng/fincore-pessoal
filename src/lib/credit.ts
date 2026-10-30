@@ -1,5 +1,5 @@
 import { localDateKey, type FinancialEntry } from './finance.ts';
-export type CreditCard = { id: string; name: string; closing_day: number; due_day: number };
+export type CreditCard = { id: string; name: string; closing_day: number; due_day: number; include_in_balance?: boolean };
 export function invoiceDate(purchaseDate: string, card: Pick<CreditCard,'closing_day'|'due_day'>, offset = 0) {
  const [year, month, day] = purchaseDate.split('-').map(Number);
  const closing = Math.min(card.closing_day, new Date(year, month, 0).getDate());
@@ -45,7 +45,7 @@ export function invoiceMonthSummary(entries:any[],cardId:string,month:string) {
   unsettled:financial.filter(e=>e.status==='previsto').length};
 }
 
-export type CardPayment = {id:string;card_id:string;invoice_month:string;bank_id:string;amount:number|string;paid_date:string;settled_bank:string|null;settled_date:string|null;notes?:string};
+export type CardPayment = {id:string;card_id:string;invoice_month:string;bank_id:string|null;amount:number|string;paid_date:string;settled_bank:string|null;settled_date:string|null;notes?:string};
 /**
  * A partial invoice payment becomes two rows, both flagged `cardPayment` so
  * consumption reports skip them (it is a transfer, not new spending):

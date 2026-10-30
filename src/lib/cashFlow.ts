@@ -1,3 +1,4 @@
+import { balanceCardEntries } from './cardBalance.ts';
 import { cashDate, entryValue, type FinancialEntry } from './finance.ts';
 import { addDays } from './recurrence.ts';
 import { addMonthsClamped } from './seriesDates.ts';
@@ -18,14 +19,14 @@ export function cashMovementRows(month: CashMonth) {
 }
 
 /** Actual bank cash is the base. Pending entries affect the forecast once, never the actual balance. */
-export function buildCashFlow(entries: Source[], bankIds: string[], cards: {id:string;name:string}[], startMonth: string, count: number, today: string) {
+export function buildCashFlow(entries: Source[], bankIds: string[], cards: {id:string;name:string;include_in_balance?:boolean}[], startMonth: string, count: number, today: string) {
  const cents = (value:number) => Math.round(value * 100);
  const bankSet = new Set(bankIds);
  const start = `${startMonth}-01`;
  const end = addDays(addMonthsClamped(start,count),-1);
  let actual = 0, opening = 0, overdueIncome = 0, overdueExpense = 0;
  const buckets = new Map<string, Map<string,CashMovement>>();
- entries.forEach((entry,index)=>{
+ balanceCardEntries(entries,cards).forEach((entry,index)=>{
   const settled = entry.status === 'realizado';
   // Unassigned realized entries never changed the balance of a registered account.
   if(settled && !bankSet.has(entry.bankId || '')) return;
