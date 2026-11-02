@@ -33,6 +33,7 @@ import DailyLedger from "./DailyLedger";
 import BanksSection from "./Banks";
 import CashFlow from "./CashFlow";
 import ControlCardSpending from "./ControlCardSpending";
+import EntryMarkers from "./EntryMarkers";
 import Transactions from "./Transactions";
 import ScopeDialog from "./RecurrenceScopeDialog";
 import { seriesTargets } from "../lib/seriesScope";
@@ -2183,9 +2184,9 @@ function Entries({
             >
               <span className="transition-transform duration-300 group-hover:scale-105"><Icon category={c} /></span>
               <div className="min-w-0 flex-1">
-                <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-[#191918]">
+                <p className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-[#191918]">
                   <span className="truncate">{x.description}</span>
-                  {x.installment && <span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-normal text-zinc-500">{x.installment}</span>}
+                  <EntryMarkers entry={x}/>
                   {x.attachments && x.attachments.length > 0 && x.attachments.map((path) => (
                     <button key={path} type="button" onClick={() => void openAttachment(path)} title={attachmentLabel(path)} className="shrink-0 rounded-full p-1 text-zinc-400 hover:bg-zinc-200 hover:text-[#191918]"><Paperclip className="h-3 w-3" /></button>
                   ))}
@@ -3106,9 +3107,9 @@ function Reports({
               {drill.items.map((entry) => (
                 <div key={entry.id} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-zinc-800">
-                      {entry.description}
-                      {entry.installment && <span className="font-normal text-zinc-400"> ({entry.installment})</span>}
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-zinc-800">
+                      <span className="truncate">{entry.description}</span>
+                      <EntryMarkers entry={entry}/>
                     </p>
                     <p className="truncate text-[11px] text-zinc-400">
                       <b className="text-xs font-extrabold text-zinc-800">{dateLabel(reportingDate(entry))}</b> · {entry.unit} · {entry.category}
