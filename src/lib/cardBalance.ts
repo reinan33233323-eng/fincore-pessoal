@@ -5,3 +5,9 @@ export function balanceCardEntries<T extends CardLinkedEntry>(entries:T[],cards:
  const excluded=new Set(cards.filter(card=>card.include_in_balance===false).map(card=>card.id));
  return entries.filter(entry=>!excluded.has(entry.creditCardId||entry.paysCardId||''));
 }
+
+/** Control purchases can be reported separately without becoming cash obligations. */
+export function controlCardEntries<T extends CardLinkedEntry>(entries:T[],cards:CardBalanceSetting[]):T[]{
+ const controls=new Set(cards.filter(card=>card.include_in_balance===false).map(card=>card.id));
+ return entries.filter(entry=>controls.has(entry.creditCardId||entry.paysCardId||''));
+}

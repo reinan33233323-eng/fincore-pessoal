@@ -32,10 +32,11 @@ import BankLogo from "./BankLogo";
 import DailyLedger from "./DailyLedger";
 import BanksSection from "./Banks";
 import CashFlow from "./CashFlow";
+import ControlCardSpending from "./ControlCardSpending";
 import Transactions from "./Transactions";
 import ScopeDialog from "./RecurrenceScopeDialog";
 import { seriesTargets } from "../lib/seriesScope";
-import { balanceCardEntries } from "../lib/cardBalance";
+import { balanceCardEntries, controlCardEntries } from "../lib/cardBalance";
 import { buildCashFlow, summarizeCashMonth } from "../lib/cashFlow";
 import { cardInvoices, cardSchedule, extendCardRecurrences } from "../lib/cardLedger";
 import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib/recurrence";
@@ -1404,7 +1405,7 @@ export function EntryForm({
       !!editing && editing.unit === unit && editing.kind === kind));
   }, [kind, unit, categories, editing?.id]);
   const monthlyPreview = !recurrence && !sameMonthInstallments && installments > 1 && date &&
-    Number.isFinite(parseMoney(amount)) && Math.round(parseMoney(amount) * 100) >= installments
+    Number.isFinite(parseMoney(amount)) && (parseMoney(amount) === 0 || Math.round(parseMoney(amount) * 100) >= installments)
       ? (cardMode ? cardSchedule({amount:parseMoney(amount),date,recurrence:"nenhuma",installments},cardMode) : monthlyParts(installments, parseMoney(amount), date)) : [];
   const purchaseInvoiceDue = cardMode && /^\d{4}-\d{2}-\d{2}$/.test(date)
     ? (editing?.invoiceMonth && date === (editing.cardPurchaseDate || editing.date)
@@ -1418,11 +1419,11 @@ export function EntryForm({
       setSaveError("Informe uma descrição para o lançamento.");
       return;
     }
-    if (!Number.isFinite(v) || v <= 0) {
+    if (!amount.trim() || !Number.isFinite(v) || v < 0) {
       setSaveError("Informe um valor válido, por exemplo 1.500,00.");
       return;
     }
-    if (!recurrence && !sameMonthInstallments && Math.round(v * 100) < installments) {
+    if (v > 0 && !recurrence && !sameMonthInstallments && Math.round(v * 100) < installments) {
       setSaveError("O valor total precisa permitir ao menos R$ 0,01 por parcela.");
       return;
     }
@@ -1454,7 +1455,7 @@ export function EntryForm({
           part.date &&
           part.date.slice(0, 7) === date.slice(0, 7) &&
           Number.isFinite(parseMoney(part.amount)) &&
-          parseMoney(part.amount) > 0,
+          parseMoney(part.amount) >= 0,
       );
       if (!validDates) {
         setSaveError(
@@ -2541,7 +2542,7 @@ function Reports({
 }: {
   entries: Entry[];
   banks: Bank[];
-  cards?: { id: string; name: string }[];
+  cards?: { id: string; name: string; include_in_balance?: boolean }[];
   allowedUnits: typeof units;
   categories: Category[];
   contacts: Counterparty[];
@@ -2576,7 +2577,7 @@ function Reports({
     )
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   const cashEntries = balanceCardEntries(entries,cards);
-  const filtered = reportingPeriod(entries, from, to).filter(
+  const periodEntries = reportingPeriod(entries, from, to).filter(
     (entry) =>
       (unit === "Todos" || entry.unit === unit) &&
       (account === "Todos" || (entry.bankId || "__unassigned__") === account) &&
@@ -2585,6 +2586,8 @@ function Reports({
       (counterparty === "Todos" ||
         contactIdentity(entry.kind, entry.unit, entry.beneficiary || "") === counterparty),
   );
+  const filtered = balanceCardEntries(periodEntries,cards);
+  const controlSpending = controlCardEntries(periodEntries,cards);
   const total = (entryKind: Kind, status?: Entry["status"]) =>
     filtered
       .filter(
@@ -2812,6 +2815,7 @@ function Reports({
           </label>
         </div>
       </div>
+      <ControlCardSpending entries={controlSpending} cards={cards} />
       <div className="fc-stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {([
           ["Receitas no período", income, "text-emerald-600", pick((e) => e.kind === "receita")],
@@ -3612,17 +3616,19 @@ function App() {
         currentUser.role === "master" || currentUser.units.includes(x.unit),
     ),
     balanceVisible = balanceCardEntries(visible,cards),
-    invoiceDisplay = cardInvoices(visible,cards),
+    invoiceDisplay = cardInvoices(balanceVisible,cards),
     monthCashForecast = buildCashFlow(visible,banks.map(bank=>bank.id),cards,key,1,today),
     monthCashSummary = summarizeCashMonth(monthCashForecast.months[0]),
     monthCashClosing = monthCashSummary.closing,
-    pending = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date <= today),cards),
-    overdue = cardInvoices(visible.filter(x=>x.status === "previsto" && x.date < today),cards),
+    pending = cardInvoices(balanceVisible.filter(x=>x.status === "previsto" && x.date <= today),cards),
+    overdue = cardInvoices(balanceVisible.filter(x=>x.status === "previsto" && x.date < today),cards),
     overduePay = overdue.filter((x) => x.kind === "despesa"),
     overdueReceive = overdue.filter((x) => x.kind === "receita"),
-    cashCurrent = visible.filter((x) => cashDate(x).startsWith(key)),
+    cashCurrent = balanceVisible.filter((x) => cashDate(x).startsWith(key)),
     // Partial invoice payments are transfers to the card, not spending.
-    current = reportingPeriod(visible.filter((x) => !x.cardPayment && !x.invoiceAdjustment), `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
+    spendingCurrent = reportingPeriod(visible.filter((x) => !x.cardPayment && !x.invoiceAdjustment), `${key}-01`, localDateKey(new Date(month.getFullYear(), month.getMonth()+1, 0))),
+    current = balanceCardEntries(spendingCurrent,cards),
+    controlCurrent = controlCardEntries(spendingCurrent,cards),
     currentDisplay = cardInvoices(cashCurrent,cards),
     localDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
@@ -3649,7 +3655,7 @@ function App() {
       return { start: localDate(first), end: localDate(last), label: labelMonth(month) };
     })(),
     listCurrent = invoiceDisplay.filter((x) => cashDate(x) >= period.start && cashDate(x) <= period.end),
-    payToday = cardInvoices(visible.filter(x=>x.kind === "despesa" && x.status === "previsto" && x.date === todayStr),cards),
+    payToday = cardInvoices(balanceVisible.filter(x=>x.kind === "despesa" && x.status === "previsto" && x.date === todayStr),cards),
     payTodayTotal = payToday.reduce((s, x) => s + x.amount, 0),
     totals = summarizeFinancialEntries(current),
     cashTotals = summarizeFinancialEntries(cashCurrent),
@@ -4248,6 +4254,7 @@ function App() {
                   )}
                 </article>
               </section>
+              <ControlCardSpending entries={controlCurrent} cards={cards} />
               <section className="fc-stagger mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {([
                   { title: "A pagar hoje", value: payTodayTotal, Icon: CalendarClock, style: "from-orange-400 to-orange-600 shadow-orange-500/40", glow: "rgb(249 115 22 / 0.10)", filter: "pagar", today: true },

@@ -9,13 +9,14 @@ export type CashDay = { date: string; opening: number; income: number; expense: 
 export type CashMonth = Omit<CashDay, 'date' | 'movements'> & { month: string; days: CashDay[] };
 
 /** Running cash balance after each movement, including multiple movements on the same day. */
-export function cashMovementRows(month: CashMonth) {
+export function cashMovementRows(month: CashMonth, descending = false) {
  let balance=Math.round(month.opening*100);
- return month.days.flatMap(day=>day.movements.map((movement,index)=>{
+ const rows = month.days.flatMap(day=>day.movements.map((movement,index)=>{
   const signed=Math.round(movement.amount*100)*(movement.kind==='receita'?1:-1);
   balance+=signed;
   return {...movement,key:`${day.date}:${index}`,date:day.date,signed:signed/100,balance:balance/100};
  }));
+ return descending ? rows.reverse() : rows;
 }
 
 /** Actual bank cash is the base. Pending entries affect the forecast once, never the actual balance. */

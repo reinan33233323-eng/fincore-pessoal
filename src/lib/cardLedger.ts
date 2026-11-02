@@ -38,8 +38,9 @@ export function cardInvoices<T extends any>(entries: T[], cards: CreditCard[]): 
   const paid=rows.filter(e=>e.status==='realizado').reduce((s,e)=>s+Math.round(entryValue(e)*100),0)/100;
   const pending=rows.filter(e=>e.status==='previsto').reduce((s,e)=>s+Math.round(entryValue(e)*100),0)/100;
   const units=[...new Set(rows.map(e=>e.unit))];
+  const unsettled=rows.some(e=>e.status==='previsto'&&!e.cardPayment);
   plain.push({...sample,id:`invoice:${key}`,seriesId:undefined,recurrence:'nenhuma',installment:undefined,
-   amount:Math.round((paid+pending)*100)/100,juros:0,discount:0,status:pending>0?'previsto':'realizado',paidDate:pending>0?null:rows.map(e=>e.paidDate||e.date).sort().at(-1),bankId:[...new Set(rows.filter(e=>e.status==='realizado').map(e=>e.bankId))].length===1?rows.find(e=>e.status==='realizado')?.bankId:null,
+   amount:Math.round((paid+pending)*100)/100,juros:0,discount:0,status:unsettled?'previsto':'realizado',paidDate:unsettled?null:rows.map(e=>e.paidDate||e.date).sort().at(-1),bankId:[...new Set(rows.filter(e=>e.status==='realizado').map(e=>e.bankId))].length===1?rows.find(e=>e.status==='realizado')?.bankId:null,
    date:[...rows].sort((a,b)=>b.date.localeCompare(a.date))[0].date,
    description:`Fatura ${cards.find(c=>c.id===sample.creditCardId)?.name || 'do cartão'} · ${sample.invoiceMonth || sample.date.slice(0,7)}`,
    category:'Fatura de cartão',unit:units.length===1?units[0]:'Vários centros de custo',beneficiary:'',notes:`${rows.length} compra(s). Detalhes na área do cartão.`,attachments:[],
