@@ -34,6 +34,7 @@ import BanksSection from "./Banks";
 import CashFlow from "./CashFlow";
 import ControlCardSpending from "./ControlCardSpending";
 import EntryMarkers from "./EntryMarkers";
+import CategoryPicker from "./CategoryPicker";
 import Transactions from "./Transactions";
 import ScopeDialog from "./RecurrenceScopeDialog";
 import { seriesTargets } from "../lib/seriesScope";
@@ -1614,6 +1615,7 @@ export function EntryForm({
           {cardMode && <div className="flex flex-wrap gap-3"><button type="button" onClick={onNewCenter} className="text-xs font-bold text-brand-700">+ Novo centro de custo</button><button type="button" onClick={onNewCategory} className="text-xs font-bold text-brand-700">+ Nova categoria / plano de contas</button></div>}
           <label className="block text-xs font-bold">
             {cardMode ? "Categoria / plano de contas" : "Categoria"}
+            {kind === "despesa" ? <CategoryPicker value={category} onChange={setCategory} options={category && !available.some(c=>c.name===category) ? [...available,{id:'existing-category',name:category}] : available} /> : (
             <select
               required
               value={category}
@@ -1630,6 +1632,7 @@ export function EntryForm({
                 <option key={c.id}>{c.name}</option>
               ))}
             </select>
+            )}
             {!available.length && (
               <span className="mt-1 block text-red-600">
                 Cadastre uma categoria para este centro no Plano de contas.

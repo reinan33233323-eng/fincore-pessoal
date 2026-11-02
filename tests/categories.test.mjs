@@ -36,3 +36,15 @@ test('new entries start blank and changing scope clears an unavailable category'
  assert.equal(categorySelection('Restaurantes',income,false),'');
  assert.equal(categorySelection('Outra unidade',expenses,false),'');
 });
+
+
+test('category suggestions match accents, partial words and rank closer names first',async()=>{
+ const {matchingCategories}=await import('../src/lib/categories.ts');
+ const categories=[{name:'Outros mercados'},{name:'Mercado da casa'},{name:'Mercado'},{name:'Saúde / Farmácia'},{name:'Alimentação / Comida Japonesa'}];
+ assert.deepEqual(matchingCategories(categories,'merc').map(c=>c.name),['Mercado','Mercado da casa','Outros mercados']);
+ assert.deepEqual(matchingCategories(categories,'saude farm').map(c=>c.name),['Saúde / Farmácia']);
+ assert.deepEqual(matchingCategories(categories,'jap comida').map(c=>c.name),['Alimentação / Comida Japonesa']);
+ assert.deepEqual(matchingCategories(categories,'inexistente'),[]);
+ assert.equal(matchingCategories(categories,'').length,categories.length);
+ assert.equal(categories[0].name,'Outros mercados');
+});
