@@ -1,3 +1,4 @@
+import EntryMarkers from "./EntryMarkers";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronRight, CreditCard, Landmark, Search, X } from "lucide-react";
 import { entryValue, reportingDate } from "../lib/finance";
@@ -134,7 +135,7 @@ function Ledger({ entries, categories, banks, cards, onOpen, embedded = false, t
                         {cat?.icon?.startsWith("data:") ? <img src={cat.icon} alt="" className="h-full w-full object-cover" /> : cat?.icon || "🏷️"}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-[#191918]"><span className="truncate">{entry.description}</span>{entry.installment && <span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-normal text-zinc-500">{entry.installment}</span>}</span>
+                        <span className="flex min-w-0 flex-wrap items-center gap-2 text-[13px] font-medium text-[#191918]"><span className="truncate">{entry.description}</span><EntryMarkers entry={entry}/></span>
                         <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500">{logo(key, "h-4 w-4 rounded-[5px] text-[7px]")}<span className="truncate">{sourceName(key)} · {entry.category}{entry.beneficiary?.trim() ? ` · ${entry.beneficiary.trim()}` : ""}</span></span>
                       </span>
                       <span className="shrink-0 text-right">
