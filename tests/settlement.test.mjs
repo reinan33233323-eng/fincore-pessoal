@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {settlementDate} from '../src/lib/settlement.ts';
+import {buildCashFlow,summarizeCashMonth,cashMovementRows} from '../src/lib/cashFlow.ts';
+const today='2026-11-10';
+const pending={id:'expense',description:'Conta antecipada',status:'previsto',kind:'despesa',amount:200,date:'2026-12-05',bankId:'bank'};
+const opening={id:'opening',kind:'receita',status:'realizado',amount:1000,date:'2026-10-01',bankId:'bank'};
+const build=rows=>buildCashFlow(rows,['bank'],[],'2026-11',2,today);
+test('new payments and receipts default to actual day rather than future due date',()=>{
+ assert.equal(settlementDate('realizado','',today,pending),today);
+ assert.equal(settlementDate('realizado','',today),today);
+ assert.equal(settlementDate('realizado','2026-11-03',today,pending),'2026-11-03');
+ assert.equal(settlementDate('previsto','2026-11-03',today,pending),null);
+ assert.equal(settlementDate('realizado','',today,{...pending,status:'realizado',paidDate:'2026-11-04'}),'2026-11-04');
+ assert.equal(settlementDate('realizado','',today,{...pending,status:'realizado',date:'2026-10-05'}),'2026-10-05');
+});
+test('advance payment moves expense to actual month and updates every following balance once',()=>{
+ const before=build([opening,pending]);
+ const paid={...pending,status:'realizado',paidDate:settlementDate('realizado','',today,pending),discount:10};
+ const after=build([opening,paid]);
+ assert.equal(before.months[0].closing,1000);
+ assert.equal(after.actual,810);
+ assert.equal(after.months[0].expense,190);
+ assert.equal(after.months[0].pendingExpense,0);
+ assert.equal(after.months[0].closing,810);
+ assert.equal(after.months[1].opening,810);
+ assert.equal(after.months[1].pendingExpense,0);
+ assert.equal(after.months[1].closing,810);
+ assert.equal(cashMovementRows(after.months[0])[0].date,today);
+ assert.equal(cashMovementRows(after.months[1]).length,0);
+ assert.deepEqual(summarizeCashMonth(after.months[0]),{opening:1000,closing:810,realized:-190,movement:-190});
+ const reversed=build([opening,{...paid,status:'previsto',paidDate:null}]);
+ assert.equal(reversed.actual,1000);assert.equal(reversed.months[0].closing,1000);assert.equal(reversed.months[1].pendingExpense,200);
+});
+test('past actual payment date and advance receipts determine month without moving due date',()=>{
+ const receipt={...pending,kind:'receita',status:'realizado',paidDate:'2026-10-31'};
+ const result=build([opening,receipt]);
+ assert.equal(result.months[0].opening,1200);assert.equal(result.months[0].income,0);assert.equal(result.months[1].pendingIncome,0);
+ assert.equal(receipt.date,'2026-12-05');
+});

@@ -35,6 +35,7 @@ import CashFlow from "./CashFlow";
 import ControlCardSpending from "./ControlCardSpending";
 import EntryMarkers from "./EntryMarkers";
 import CategoryPicker from "./CategoryPicker";
+import { settlementDate } from "../lib/settlement";
 import Transactions from "./Transactions";
 import ScopeDialog from "./RecurrenceScopeDialog";
 import { seriesTargets } from "../lib/seriesScope";
@@ -1416,6 +1417,11 @@ export function EntryForm({
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const v = parseMoney(amount);
+    const effectivePaidDate = cardMode ? null : settlementDate(status,paidDate,localDateKey(new Date()),editing);
+    if(effectivePaidDate && effectivePaidDate > localDateKey(new Date())){
+      setSaveError("Informe a data em que o pagamento ou recebimento aconteceu, até hoje.");
+      return;
+    }
     const contactName = beneficiary.trim().replace(/\s+/g, " ");
     if (!description.trim()) {
       setSaveError("Informe uma descrição para o lançamento.");
@@ -1510,7 +1516,7 @@ export function EntryForm({
           installments: sameMonthInstallments ? 1 : installments,
           attachments,
           juros: kind === "despesa" ? finalJuros : 0,
-          paidDate: !cardMode && status === "realizado" ? paidDate || date : null,
+          paidDate: effectivePaidDate,
           discount: kind === "despesa" ? finalDiscount : 0,
           bankId: cardMode ? null : bankId || null,
         },
@@ -1848,7 +1854,11 @@ export function EntryForm({
               Situação
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as Entry["status"])}
+                onChange={(e) => {
+                  const next=e.target.value as Entry["status"];
+                  setStatus(next);
+                  setPaidDate(settlementDate(next,paidDate,localDateKey(new Date()),editing)||"");
+                }}
                 className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
               >
                 <option value="previsto">Previsto</option>
@@ -1880,10 +1890,11 @@ export function EntryForm({
                 <input
                   type="date"
                   value={paidDate}
+                  max={localDateKey(new Date())}
                   onChange={(e) => setPaidDate(e.target.value)}
                   className="mt-1.5 w-full rounded-xl border bg-zinc-50 p-3 text-sm font-normal"
                 />
-                <span className="mt-1 block font-normal text-zinc-400">Mede o atraso em relação ao vencimento (campo Data).</span>
+                <span className="mt-1 block font-normal text-zinc-400">Define o dia da movimentação no fluxo de caixa. Em pagamentos antecipados, informe o dia em que o dinheiro saiu da conta.</span>
               </label>
 
             </div>
@@ -3784,6 +3795,7 @@ function App() {
                   ? (x.recurrence === "semanal" ? shiftWeeklyDate(x.date, editing.date, data.date) : seriesDueDate(occurrences, editing, x, data.date))
                   : data.date,
                 installment: x.installment,
+                ...(isWholeSeries && seriesChanges.status ? {paidDate:seriesChanges.status === "realizado" ? (x.status === "realizado" ? x.paidDate||x.date : data.paidDate||today) : null} : {}),
               }
             : x,
         );
