@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   readAuthenticatedRows,
   supabase,
@@ -46,6 +46,9 @@ import { addDays, nextWeeklyDates, shiftWeeklyDate, defaultBankId } from "../lib
 import { renamedCategoryEntries, categorySelection } from "../lib/categories";
 import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
+import QuickEntry, { type QuickDraft } from "./QuickEntry";
+import { quickBankEntry, quickCardData } from "../lib/quickEntry";
+import { useIsMobile } from "./components/ui/use-mobile";
 import { adjustmentEntry, cardPaymentEntries, invoiceDate, invoiceCycle, type BalanceAdjustment, type CardPayment, type CreditCard as PersonalCreditCard } from "../lib/credit";
 import { reportingDate, reportingPeriod, cashDate, cashPosition } from "../lib/finance";
 import { entryValue, summarizeFinancialEntries, summarizeBank, localDateKey, localMonthKey } from "../lib/finance";
@@ -1231,11 +1234,14 @@ export function EntryForm({
   banks,
   allowIncome = true,
   editing,
+  draft,
   scope: initialScope,
   close,
   save,
   onDelete,
 }: {
+  /** Valores iniciais de um lançamento novo (vindos do Lançamento rápido). */
+  draft?: Partial<Entry> | null;
   /** Shown only when editing: deletes this entry (and offers the whole series). */
   onDelete?: () => void;
   cardMode?: PersonalCreditCard;
@@ -1259,9 +1265,9 @@ export function EntryForm({
   ) => Promise<void>;
 }) {
   const [kind, setKind] = useState<Kind>(editing?.kind ?? (allowIncome ? initial : "despesa")),
-    [unit, setUnit] = useState<Unit>(editing?.unit ?? allowedUnits[0]?.name ?? "Consultoria"),
-    [category, setCategory] = useState(editing?.category ?? ""),
-    [description, setDescription] = useState(editing?.description ?? ""),
+    [unit, setUnit] = useState<Unit>(editing?.unit ?? draft?.unit ?? allowedUnits[0]?.name ?? "Consultoria"),
+    [category, setCategory] = useState(editing?.category ?? draft?.category ?? ""),
+    [description, setDescription] = useState(editing?.description ?? draft?.description ?? ""),
     [beneficiary, setBeneficiary] = useState(editing?.beneficiary ?? ""),
     [contactPickerOpen, setContactPickerOpen] = useState(false),
     [contactSearch, setContactSearch] = useState(""),
@@ -1287,19 +1293,19 @@ export function EntryForm({
         ? String(Math.round((editing.amount + (editing.juros ?? 0) - (editing.discount ?? 0)) * 100) / 100)
         : "",
     ),
-    [bankId, setBankId] = useState<string>(() => editing ? editing.bankId ?? "" : defaultBankId(banks)),
+    [bankId, setBankId] = useState<string>(() => editing ? editing.bankId ?? "" : draft?.bankId ?? defaultBankId(banks)),
     [dragging, setDragging] = useState(false),
-    [paidDate, setPaidDate] = useState(editing?.paidDate ?? ""),
-    [amount, setAmount] = useState(editing ? String(editing.amount) : ""),
+    [paidDate, setPaidDate] = useState(editing?.paidDate ?? draft?.paidDate ?? ""),
+    [amount, setAmount] = useState(editing ? String(editing.amount) : draft?.amount !== undefined ? String(draft.amount) : ""),
     [date, setDate] = useState(
-      editing?.date ?? new Date().toISOString().slice(0, 10),
+      editing?.date ?? draft?.date ?? new Date().toISOString().slice(0, 10),
     ),
     [status, setStatus] = useState<Entry["status"]>(
-      editing?.status ?? "previsto",
+      editing?.status ?? draft?.status ?? "previsto",
     ),
     [recurrence, setRecurrence] = useState(Boolean(editing && editing.recurrence !== "nenhuma")),
     [frequency, setFrequency] = useState<"mensal" | "semanal">(editing?.recurrence === "semanal" ? "semanal" : "mensal"),
-    [installments, setInstallments] = useState(editing?.installments ?? 1),
+    [installments, setInstallments] = useState(editing?.installments ?? draft?.installments ?? 1),
     [sameMonthInstallments, setSameMonthInstallments] = useState(false),
     [sameMonthPartCount, setSameMonthPartCount] = useState(2),
     [sameMonthPartsState, setSameMonthPartsState] = useState<SameMonthPart[]>(
@@ -3241,6 +3247,31 @@ function App() {
     [month, setMonth] = useState(
       () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     );
+  const isMobile = useIsMobile(),
+    [entryDraft, setEntryDraft] = useState<Partial<Entry> | null>(null),
+    [cardDraft, setCardDraft] = useState<{ cardId: string; data: any } | null>(null),
+    quickOpened = useRef(false);
+  // No celular, o app abre direto no Lançamento rápido (uma vez por sessão).
+  useEffect(() => {
+    if (!currentUser || !dataReady || !isMobile || quickOpened.current) return;
+    quickOpened.current = true;
+    setScreen("rapido");
+  }, [currentUser, dataReady, isMobile]);
+  const openQuickDetails = ({ source, input }: QuickDraft) => {
+    if (source.type === "card") {
+      const card = cards.find((c) => c.id === source.id);
+      if (!card) return;
+      setCardDraft({ cardId: card.id, data: quickCardData(input) });
+      setCardFocus({ cardId: card.id, month: invoiceDate(input.date, card, 0).slice(0, 7) });
+      setScreen("cartoes");
+      return;
+    }
+    setEditing(null);
+    setEditScope("one");
+    setEntryDraft(quickBankEntry(input, source.id));
+    setScreen("lancamentos");
+    setModal("despesa");
+  };
   const contacts = useMemo(
     () => contactsWithLegacyEntries(savedContacts, entries),
     [savedContacts, entries],
@@ -3974,8 +4005,31 @@ function App() {
       { id: "contatos", text: "Fornecedores/clientes", Icon: Building2 },
       { id: "relatorios", text: "Relatórios", Icon: BarChart3 },
     ];
+  if (screen === "rapido")
+    return (
+      <QuickEntry
+        banks={banks}
+        cards={cards}
+        categories={categories}
+        units={allowedUnits}
+        saveBank={(entry) => save(entry, "one")}
+        onCardSaved={refreshPersonal}
+        onMoreDetails={openQuickDetails}
+        onOpenApp={() => setScreen("dashboard")}
+      />
+    );
   return (
     <div className="flex h-screen overflow-hidden bg-[#f4f4f5]">
+      {isMobile && (
+        <button
+          type="button"
+          aria-label="Lançamento rápido"
+          onClick={() => setScreen("rapido")}
+          className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#191918] text-white shadow-[0_12px_28px_-10px_rgba(24,24,27,0.9)]"
+        >
+          <Plus size={26} aria-hidden />
+        </button>
+      )}
       <aside
         className={`fixed z-30 fc-grain flex h-full w-64 shrink-0 flex-col bg-[radial-gradient(120%_60%_at_0%_0%,#2a2a2d_0%,#18181b_55%,#0e0e10_100%)] text-white shadow-[inset_-1px_0_0_rgba(255,255,255,0.06)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] lg:relative ${menu ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
@@ -4483,7 +4537,8 @@ function App() {
             <CashFlow initialMonth={key} entries={visible} banks={banks} cards={cards} onRefresh={refreshPersonal} onAccounts={()=>setScreen("contas")} />
           ) : screen === "cartoes" ? (
             <CreditCards categories={categories} key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={[...entries, ...cardPaymentEntries(cardPayments, cards)]} payments={cardPayments} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")} onEntries={(invoiceMonth)=>{setMonth(new Date(`${invoiceMonth}-01T12:00:00`));setSearch("");setFilter("Todos");setEntryFilter("todos");setPeriodMode("mes");setCounterpartyFilter("todos");setOverdueKind("todos");setScreen("lancamentos");}}
-              renderForm={(purchase,savePurchase,close,card,onDelete,scope)=><EntryForm key={`${purchase?.id||'new'}:${scope||'one'}`} scope={scope} onDelete={onDelete} kind="despesa" cardMode={card} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={close} save={savePurchase} />}
+              startPurchase={Boolean(cardDraft)}
+              renderForm={(purchase,savePurchase,close,card,onDelete,scope)=><EntryForm key={`${purchase?.id||'new'}:${scope||'one'}`} scope={scope} onDelete={onDelete} kind="despesa" cardMode={card} draft={!purchase && cardDraft?.cardId===card.id ? cardDraft.data : null} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={()=>{setCardDraft(null);close();}} save={async(...args)=>{await savePurchase(...args);setCardDraft(null);}} />}
             />
           ) : screen === "contatos" ? (
             <ContactsScreen
@@ -4691,12 +4746,17 @@ function App() {
           banks={banks}
           allowIncome={isMaster}
           editing={editing}
+          draft={editing ? null : entryDraft}
           scope={editScope}
           close={() => {
             setModal(null);
             setEditing(null);
+            setEntryDraft(null);
           }}
-          save={save}
+          save={async (...args) => {
+            await save(...args);
+            setEntryDraft(null);
+          }}
           onDelete={editing && !editing.balanceAdjustment && !editing.creditCardId ? () => {
             const target = editing;
             setModal(null);

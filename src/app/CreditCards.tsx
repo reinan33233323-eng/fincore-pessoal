@@ -14,10 +14,10 @@ import { CurrencyInput, fmt, parseMoney } from './shared';
 
 const field='mt-1 block w-full rounded-xl border bg-zinc-50 p-2.5 text-sm font-normal';
 const button='rounded-full bg-[#191918] px-4 py-2.5 hover:bg-black shadow-[0_8px_20px_-10px_rgba(24,24,27,0.8)] text-sm font-bold text-white disabled:opacity-50';
-type Props={categories?:any[];payments?:CardPayment[];cards:CreditCard[];setCards:(fn:(old:CreditCard[])=>CreditCard[])=>void;banks:Bank[];entries:any[];focus?:{cardId:string;month:string}|null;
+type Props={/** Abre o formulário de nova compra ao montar (Lançamento rápido → Mais detalhes). */startPurchase?:boolean;categories?:any[];payments?:CardPayment[];cards:CreditCard[];setCards:(fn:(old:CreditCard[])=>CreditCard[])=>void;banks:Bank[];entries:any[];focus?:{cardId:string;month:string}|null;
  onRefresh:()=>Promise<void>;onPlans:()=>void;onEntries:(month:string)=>void;
  renderForm:(editing:any,save:(data:any,scope:'one'|'series',parts?:{date:string;amount:string}[])=>Promise<void>,close:()=>void,card:CreditCard,onDelete:(()=>void)|undefined,scope?:SeriesScope)=>ReactNode};
-export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPlans,onEntries,renderForm,focus,payments=[],categories:categoryDefinitions=[]}:Props) {
+export default function CreditCards({startPurchase=false,cards,setCards,banks,entries,onRefresh,onPlans,onEntries,renderForm,focus,payments=[],categories:categoryDefinitions=[]}:Props) {
  const today=localDateKey(new Date());
  const pendingSave=useRef<{key:string;rows:any[]}|null>(null);
  const [cardId,setCardId]=useState(focus?.cardId||cards[0]?.id||''),[month,setMonth]=useState(()=>focus?.month||(cards.find(c=>c.id===(focus?.cardId||cards[0]?.id))?invoiceDate(today,cards.find(c=>c.id===(focus?.cardId||cards[0]?.id))!).slice(0,7):localMonthKey(new Date())));
@@ -25,7 +25,7 @@ export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPl
  const [name,setName]=useState(''),[closing,setClosing]=useState('25'),[due,setDue]=useState('5'),[editing,setEditing]=useState('');
  const [includeInBalance,setIncludeInBalance]=useState(true);
  const [bank,setBank]=useState(defaultBankId(banks)||banks[0]?.id||''),[paymentDate,setPaymentDate]=useState(today);
- const [purchaseOpen,setPurchaseOpen]=useState(false),[editingPurchase,setEditingPurchase]=useState<any>(null);
+ const [purchaseOpen,setPurchaseOpen]=useState(startPurchase),[editingPurchase,setEditingPurchase]=useState<any>(null);
  const [search,setSearch]=useState(''),[category,setCategory]=useState('Todas'),[center,setCenter]=useState('Todos'),[statusFilter,setStatusFilter]=useState('todos');
  const [cardFormOpen,setCardFormOpen]=useState(!cards.length),[paymentOpen,setPaymentOpen]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
