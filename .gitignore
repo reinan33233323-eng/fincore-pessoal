@@ -7,3 +7,7 @@ dist/
 /node_modules
 
 /node_modules
+
+# Arquivos temporários de testes no navegador
+.playwright-mcp/
+.superpowers/
