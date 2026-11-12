@@ -6,7 +6,7 @@ import { seriesTargets, type SeriesScope } from '../lib/seriesScope';
 import { BankPicker } from './BankLogo';
 import { adjustCardInvoice, saveCreditCard, saveCardPurchases, payCreditInvoice, deleteCardPurchase, cancelCardSeries, signedAttachmentUrl, addCardPartialPayment, deleteCardPartialPayment, type Bank } from '../lib/bridge';
 import { invoiceDate, invoiceCycle, invoiceMonthSummary, type CardPayment, type CreditCard } from '../lib/credit';
-import { cardSchedule } from '../lib/cardLedger';
+import { newCardPurchaseRows } from '../lib/quickEntry';
 import { addDays, defaultBankId, shiftWeeklyDate } from '../lib/recurrence';
 import { addMonthsClamped, changedSeriesFields, seriesDueDate } from '../lib/seriesDates';
 import { localDateKey, localMonthKey } from '../lib/finance';
@@ -69,9 +69,7 @@ export default function CreditCards({cards,setCards,banks,entries,onRefresh,onPl
    const key=JSON.stringify({data,parts,cardId:card.id});
    if(pendingSave.current?.key===key)rows=pendingSave.current.rows;
    else {
-    const planned=cardSchedule(data,card,parts);
-    const seriesId=planned.length>1||data.recurrence!=='nenhuma'?crypto.randomUUID():undefined;
-    rows=planned.map(e=>({...e,id:crypto.randomUUID(),seriesId}));
+    rows=newCardPurchaseRows(data,card,parts);
     pendingSave.current={key,rows};
    }
   }
