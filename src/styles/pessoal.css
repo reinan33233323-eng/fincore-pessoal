@@ -228,3 +228,28 @@ summary::-webkit-details-marker { display: none; }
 .fc-meter { height: 6px; border-radius: 999px; background: #f1f1f3; overflow: hidden; }
 .fc-meter > span { display: block; height: 100%; border-radius: inherit; transform-origin: left; animation: fc-grow 700ms var(--ease-out) backwards; }
 @keyframes fc-grow { from { transform: scaleX(0); } }
+
+/* ——— Celular ——— */
+@media (max-width: 1023px) {
+  /* iOS amplia a página ao focar campos com fonte menor que 16px. */
+  input, select, textarea { font-size: 16px !important; }
+}
+@media (max-width: 639px) {
+  /* Janelas viram painéis que sobem de baixo, na largura toda. */
+  .fc-overlay { align-items: flex-end !important; justify-content: stretch !important; padding: 0 !important; }
+  .fc-overlay > *:not(.fc-drawer) {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 94dvh !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 1.5rem 1.5rem 0 0 !important;
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+    animation-name: fc-sheet !important;
+  }
+  .fc-overlay > .fc-drawer { width: 100% !important; max-width: none !important; }
+}
+@keyframes fc-sheet { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Cartões dentro de grids não podem crescer além da coluna por causa de
+   gráficos/tabelas roláveis: o conteúdo rola, o cartão não estoura a tela. */
+.fc-card, .fc-card-soft { min-width: 0; }

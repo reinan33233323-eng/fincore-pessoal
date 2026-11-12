@@ -48,7 +48,6 @@ import { sameMonthParts, monthlyParts } from "../lib/installments";
 import CreditCards from "./CreditCards";
 import QuickEntry, { type QuickDraft } from "./QuickEntry";
 import { quickBankEntry, quickCardData } from "../lib/quickEntry";
-import { useIsMobile } from "./components/ui/use-mobile";
 import { adjustmentEntry, cardPaymentEntries, invoiceDate, invoiceCycle, type BalanceAdjustment, type CardPayment, type CreditCard as PersonalCreditCard } from "../lib/credit";
 import { reportingDate, reportingPeriod, cashDate, cashPosition } from "../lib/finance";
 import { entryValue, summarizeFinancialEntries, summarizeBank, localDateKey, localMonthKey } from "../lib/finance";
@@ -2514,7 +2513,7 @@ function CounterpartyReportPanel({
       </div>
       {moved.length > 0 && (
         <div className="mt-5 h-64 overflow-x-auto">
-          <div className="h-full" style={{ minWidth: 380 }}>
+          <div className="h-full" style={{ minWidth: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={moved.slice(0, 8).map((row) => ({ ...row, label: `${row.name} · ${row.unit}` })).reverse()} layout="vertical" margin={{ left: 8, right: 12 }}>
                 <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="3 3" />
@@ -2529,7 +2528,20 @@ function CounterpartyReportPanel({
           </div>
         </div>
       )}
-      <div className="mt-4 overflow-x-auto">
+      <ul className="mt-4 divide-y divide-zinc-100 sm:hidden">
+        {rows.map((row) => (
+          <li key={row.key}>
+            <button type="button" onClick={() => drill(`${row.name} · ${row.unit}`, entriesFor(row.key))} className="flex w-full items-center justify-between gap-3 py-3 text-left">
+              <span className="min-w-0">
+                <b className="block truncate text-sm text-zinc-800">{row.name}</b>
+                <span className="block text-[11px] text-zinc-500">{row.unit} · {row.count} lanç. · {expense ? "Pago" : "Recebido"} {fmt(row.realized)}{row.pending ? ` · aberto ${fmt(row.pending)}` : ""}{row.overdue ? ` · vencido ${fmt(row.overdue)}` : ""}</span>
+              </span>
+              <b className="shrink-0 text-sm tabular-nums">{fmt(row.total)}</b>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 hidden overflow-x-auto sm:block">
         <table className="fc-table min-w-[650px] text-left text-xs">
           <thead>
             <tr><th className="p-3">{expense ? "Fornecedor" : "Cliente / pagador"}</th><th className="p-3">Centro</th><th className="p-3 text-right">{expense ? "Pago" : "Recebido"}</th><th className="p-3 text-right">Em aberto</th><th className="p-3 text-right">Vencido</th><th className="p-3 text-right">Total</th><th className="p-3 text-right">Lanç.</th></tr>
@@ -2546,8 +2558,8 @@ function CounterpartyReportPanel({
             ))}
           </tbody>
         </table>
-        {!rows.length && <p className="py-8 text-center text-sm text-zinc-400">Nenhum cadastro ou lançamento identificado para este filtro.</p>}
       </div>
+      {!rows.length && <p className="py-8 text-center text-sm text-zinc-400">Nenhum cadastro ou lançamento identificado para este filtro.</p>}
     </section>
   );
 }
@@ -2885,7 +2897,7 @@ function Reports({
         </div>
         {filtered.length && periodBuckets.length ? (
           <div className="mt-5 overflow-x-auto">
-            <div style={{ minWidth: Math.max(600, periodBuckets.length * 105) }}>
+            <div style={{ minWidth: Math.max(280, periodBuckets.length * 60) }}>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={periodBuckets} margin={{ top: 8, right: 8, left: 8, bottom: 4 }} barGap={4} maxBarSize={44}>
                   <CartesianGrid vertical={false} stroke="#ececee" strokeDasharray="3 3" />
@@ -2956,8 +2968,21 @@ function Reports({
       <section className="fc-card p-5">
         <h2 className="fc-h">Detalhamento por categoria</h2>
         <p className="fc-sub mt-1">Total, situação, vencidos e quantidade de lançamentos no período.</p>
-        {categoryDetails.length ? (
-          <div className="mt-4 overflow-x-auto">
+        {categoryDetails.length ? (<>
+          <ul className="mt-4 divide-y divide-zinc-100 sm:hidden">
+            {categoryDetails.map((item) => (
+              <li key={item.key}>
+                <button type="button" onClick={() => openDrill(`${item.name} · ${item.unit}`, entriesByCategory(item))} className="flex w-full items-center justify-between gap-3 py-3 text-left">
+                  <span className="min-w-0">
+                    <b className="flex items-center gap-2 truncate text-sm text-zinc-800"><span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</b>
+                    <span className="block text-[11px] text-zinc-500">{item.kind === "despesa" ? "Despesa" : "Receita"} · {item.unit} · {item.count} lanç.{item.pending ? ` · aberto ${fmt(item.pending)}` : ""}{item.overdue ? ` · vencido ${fmt(item.overdue)}` : ""}</span>
+                  </span>
+                  <b className="shrink-0 text-sm tabular-nums">{fmt(item.total)}</b>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 hidden overflow-x-auto sm:block">
             <table className="fc-table min-w-[760px] text-left text-xs">
               <thead>
                 <tr><th className="p-3">Categoria</th><th className="p-3">Centro</th><th className="p-3">Tipo</th><th className="p-3 text-right">Realizado</th><th className="p-3 text-right">Em aberto</th><th className="p-3 text-right">Vencido</th><th className="p-3 text-right">Total</th><th className="p-3 text-right">Lançamentos</th></tr>
@@ -2982,7 +3007,7 @@ function Reports({
               </tbody>
             </table>
           </div>
-        ) : <p className="py-8 text-center text-sm text-zinc-400">Sem categorias com movimento no período.</p>}
+        </>) : <p className="py-8 text-center text-sm text-zinc-400">Sem categorias com movimento no período.</p>}
       </section>
       <div className="grid gap-5 xl:grid-cols-2">
         <section className="fc-card p-5">
@@ -2991,7 +3016,7 @@ function Reports({
           {expenseDetails.length ? (
             <>
               <div className="mt-4 overflow-x-auto">
-                <div style={{ minWidth: 400 }}>
+                <div style={{ minWidth: 280 }}>
                   <ResponsiveContainer width="100%" height={Math.max(240, Math.min(expenseDetails.length, 8) * 42 + 45)}>
                     <BarChart data={expenseDetails.slice(0, 8).reverse().map((item) => ({ ...item, label: `${item.name} · ${item.unit}` }))} layout="vertical" margin={{ left: 6, right: 20 }}>
                       <CartesianGrid horizontal={false} stroke="#ececee" strokeDasharray="3 3" />
@@ -3247,8 +3272,7 @@ function App() {
     [month, setMonth] = useState(
       () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     );
-  const isMobile = useIsMobile(),
-    [entryDraft, setEntryDraft] = useState<Partial<Entry> | null>(null),
+  const [entryDraft, setEntryDraft] = useState<Partial<Entry> | null>(null),
     [cardDraft, setCardDraft] = useState<{ cardId: string; data: any } | null>(null),
     quickOpened = useRef(false);
   // No celular, o app abre direto no Lançamento rápido — só na carga inicial.
@@ -4014,6 +4038,26 @@ function App() {
       { id: "contatos", text: "Fornecedores/clientes", Icon: Building2 },
       { id: "relatorios", text: "Relatórios", Icon: BarChart3 },
     ];
+  const goTo = (id: string) => {
+    setScreen(id);
+    if (id === "lancamentos") {
+      setFilter("Todos");
+      setCounterpartyFilter("todos");
+      setSearch("");
+      setEntryFilter("todos");
+      setOverdueKind("todos");
+      setPeriodMode("mes");
+    }
+    setMenu(false);
+  };
+  // Celular: abas fixas embaixo; "Mais" abre o menu lateral com as demais áreas.
+  const tabs = [
+    { id: "dashboard", text: "Início", Icon: LayoutDashboard },
+    { id: "lancamentos", text: "Lançamentos", Icon: ReceiptText },
+    { id: "rapido", text: "Lançar", Icon: Plus },
+    { id: "cartoes", text: "Cartões", Icon: CreditCard },
+  ].filter((tab) => tab.id === "rapido" || screenAllowed(tab.id));
+  const inTabs = tabs.some((tab) => tab.id === screen);
   if (screen === "rapido")
     return (
       <QuickEntry
@@ -4032,17 +4076,50 @@ function App() {
       />
     );
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f4f4f5]">
-      {isMobile && (
-        <button
-          type="button"
-          aria-label="Lançamento rápido"
-          onClick={openQuickEntry}
-          className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#191918] text-white shadow-[0_12px_28px_-10px_rgba(24,24,27,0.9)]"
-        >
-          <Plus size={26} aria-hidden />
-        </button>
+    <div className="flex h-dvh overflow-hidden bg-[#f4f4f5]">
+      {menu && (
+        <div
+          aria-hidden
+          onClick={() => setMenu(false)}
+          className="fc-overlay fixed inset-0 z-[25] bg-zinc-950/40 backdrop-blur-[2px] lg:hidden"
+        />
       )}
+      <nav
+        aria-label="Navegação principal"
+        className="fixed inset-x-0 bottom-0 z-[24] border-t border-black/[0.06] bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
+      >
+        <div className="mx-auto grid max-w-md grid-cols-5">
+          {tabs.map(({ id, text, Icon }) =>
+            id === "rapido" ? (
+              <button key={id} type="button" onClick={openQuickEntry} aria-label="Lançamento rápido" className="flex items-center justify-center py-2">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#191918] text-white shadow-[0_8px_20px_-8px_rgba(24,24,27,0.9)]">
+                  <Plus size={22} aria-hidden />
+                </span>
+              </button>
+            ) : (
+              <button
+                key={id}
+                type="button"
+                onClick={() => goTo(id)}
+                aria-current={screen === id ? "page" : undefined}
+                className={`flex flex-col items-center justify-center gap-1 py-2 text-[10px] font-semibold ${screen === id ? "text-[#191918]" : "text-zinc-400"}`}
+              >
+                <Icon size={21} strokeWidth={screen === id ? 2.4 : 1.8} aria-hidden />
+                {text}
+              </button>
+            ),
+          )}
+          <button
+            type="button"
+            onClick={() => setMenu(true)}
+            aria-expanded={menu}
+            className={`flex flex-col items-center justify-center gap-1 py-2 text-[10px] font-semibold ${!inTabs ? "text-[#191918]" : "text-zinc-400"}`}
+          >
+            <Menu size={21} strokeWidth={!inTabs ? 2.4 : 1.8} aria-hidden />
+            Mais
+          </button>
+        </div>
+      </nav>
       <aside
         className={`fixed z-30 fc-grain flex h-full w-64 shrink-0 flex-col bg-[radial-gradient(120%_60%_at_0%_0%,#2a2a2d_0%,#18181b_55%,#0e0e10_100%)] text-white shadow-[inset_-1px_0_0_rgba(255,255,255,0.06)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] lg:relative ${menu ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
@@ -4067,18 +4144,7 @@ function App() {
             .map((x) => (
               <button
                 key={x.id}
-                onClick={() => {
-                  setScreen(x.id);
-                  if (x.id === "lancamentos") {
-                    setFilter("Todos");
-                    setCounterpartyFilter("todos");
-                    setSearch("");
-                    setEntryFilter("todos");
-                    setOverdueKind("todos");
-                    setPeriodMode("mes");
-                  }
-                  setMenu(false);
-                }}
+                onClick={() => goTo(x.id)}
                 className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium tracking-[-0.01em] ${screen === x.id ? "text-[#191918]" : "text-white/55 hover:bg-white/[0.05] hover:text-white"}`}
               >
                 {screen === x.id && (
@@ -4110,12 +4176,9 @@ function App() {
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="relative z-20 flex items-center justify-between border-b border-black/[0.06] bg-white/80 px-5 py-3.5 backdrop-blur-xl">
-          <div className="flex gap-3">
-            <button aria-label="Abrir menu" className="rounded-xl p-2 hover:bg-zinc-100 lg:hidden" onClick={() => setMenu(true)}>
-              <Menu className="h-5 w-5" />
-            </button>
-            <div>
+        <header className="relative z-20 flex items-center justify-between border-b border-black/[0.06] bg-white/80 px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-xl lg:px-5 lg:py-3.5">
+          <div className="flex min-w-0 gap-3">
+            <div className="min-w-0">
               <h1 className="text-[15px] font-semibold tracking-[-0.02em] text-[#191918]">
                 {screen === "dashboard"
                   ? "Dashboard Financeiro"
@@ -4135,7 +4198,7 @@ function App() {
                           ? "Relatórios financeiros"
                           : "Lançamentos"}
               </h1>
-              <p className="text-xs text-zinc-500">
+              <p className="hidden text-xs text-zinc-500 sm:block">
                 {screen === "contas" ? "Cadastre e acompanhe suas contas bancárias" : allowedUnits.map((unit) => unit.name).join(", ") || "Centros de custo"}
               </p>
             </div>
@@ -4248,7 +4311,7 @@ function App() {
             </div>
           </div>
         </header>
-        <div key={screen} className={screen === "lancamentos" ? "min-h-0 flex-1 overflow-hidden p-3 sm:p-5" : screen === "cartoes" ? "fc-screen flex-1 overflow-y-auto p-3 sm:p-5" : "fc-screen flex-1 overflow-y-auto p-4 sm:p-6"}>
+        <div key={screen} className={`${screen === "lancamentos" ? "min-h-0 flex-1 overflow-hidden p-3 sm:p-5" : screen === "cartoes" ? "fc-screen flex-1 overflow-y-auto p-3 sm:p-5" : "fc-screen flex-1 overflow-y-auto p-4 sm:p-6"} pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-6`}>
           {screen === "dashboard" ? (
             <>
               <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
