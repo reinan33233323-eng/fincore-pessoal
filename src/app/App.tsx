@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import {
   readAuthenticatedRows,
   supabase,
@@ -3274,20 +3274,14 @@ function App() {
     );
   const [entryDraft, setEntryDraft] = useState<Partial<Entry> | null>(null),
     [cardDraft, setCardDraft] = useState<{ cardId: string; data: any } | null>(null),
-    quickOpened = useRef(false);
-  // No celular, o app abre direto no Lançamento rápido — só na carga inicial.
-  // Girar o aparelho ou estreitar a janela depois não troca de tela, para não
-  // esconder um formulário aberto.
-  useEffect(() => {
-    if (!currentUser || !dataReady || quickOpened.current) return;
-    quickOpened.current = true;
-    if (window.innerWidth < 768) setScreen("rapido");
-  }, [currentUser, dataReady]);
+    // Tela para onde o "Voltar" do Lançamento rápido retorna.
+    [quickBackTo, setQuickBackTo] = useState("dashboard");
   const openQuickEntry = () => {
     setModal(null);
     setEditing(null);
     setEntryDraft(null);
     setCardDraft(null);
+    if (screen !== "rapido") setQuickBackTo(screen);
     setScreen("rapido");
   };
   const openQuickDetails = ({ source, input, amount }: QuickDraft) => {
@@ -4072,7 +4066,7 @@ function App() {
         }}
         onCardSaved={refreshPersonal}
         onMoreDetails={openQuickDetails}
-        onOpenApp={() => setScreen("dashboard")}
+        onOpenApp={() => setScreen(quickBackTo)}
       />
     );
   return (

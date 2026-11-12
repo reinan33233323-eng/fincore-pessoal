@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { Check, CreditCard as CardIcon, LayoutDashboard, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Check, CreditCard as CardIcon, SlidersHorizontal } from 'lucide-react';
 import CategoryPicker from './CategoryPicker';
 import BankLogo from './BankLogo';
 import { CurrencyInput, fmt, parseMoney } from './shared';
@@ -79,7 +79,7 @@ export default function QuickEntry({ banks, cards, categories, units, createBank
    <header className="flex items-center justify-between px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
     <img src={`${import.meta.env.BASE_URL}fincore-pessoal-logo.svg`} alt="Fincore Pessoal" className="h-7" />
     <button type="button" onClick={onOpenApp} className="flex items-center gap-1.5 rounded-full bg-white px-3 py-2 text-xs font-bold text-zinc-700 shadow-sm">
-     <LayoutDashboard size={14} aria-hidden /> App completo
+     <ArrowLeft size={14} aria-hidden /> Voltar
     </button>
    </header>
 
@@ -88,7 +88,7 @@ export default function QuickEntry({ banks, cards, categories, units, createBank
 
     {!current ? (
      <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600">
-      Cadastre um banco ou cartão no <button type="button" onClick={onOpenApp} className="font-bold underline">app completo</button> para lançar por aqui.
+      Cadastre um banco ou cartão em <button type="button" onClick={onOpenApp} className="font-bold underline">Contas ou Cartões</button> para lançar por aqui.
      </p>
     ) : (<>
      <label className="block text-xs font-bold">
