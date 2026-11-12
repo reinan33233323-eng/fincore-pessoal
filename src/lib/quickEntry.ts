@@ -66,3 +66,27 @@ export function pickSource(remembered: string | null, banks: { id: string; name:
  if (bank) return { type: 'bank', id: bank };
  return cards[0] ? { type: 'card', id: cards[0].id } : null;
 }
+
+/**
+ * Keeps the rows of a save until persist AND the follow-up refresh succeed, so
+ * tapping "Lançar" again after a failure upserts the same ids instead of
+ * creating duplicates. A different `key` (the form changed) builds new rows.
+ */
+export function createPendingSaver() {
+ let pending: { key: string; rows: any[] } | null = null;
+ return {
+  async run<T extends { id: string }>(key: string, build: () => T[], persist: (rows: T[]) => Promise<void>, after: () => Promise<void>) {
+   if (pending?.key !== key) pending = { key, rows: build() };
+   await persist(pending.rows as T[]);
+   await after();
+   pending = null;
+  },
+ };
+}
+
+/** "Mais detalhes": an empty field stays empty instead of becoming R$ 0,00. */
+export function quickDraftAmount(raw: string): number | undefined {
+ if (raw === '') return undefined;
+ const value = Number(raw);
+ return Number.isFinite(value) ? value : undefined;
+}

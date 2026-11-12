@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useRef, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { Check, CreditCard as CardIcon, LayoutDashboard, SlidersHorizontal } from 'lucide-react';
 import CategoryPicker from './CategoryPicker';
 import BankLogo from './BankLogo';
@@ -6,7 +6,7 @@ import { CurrencyInput, fmt, parseMoney } from './shared';
 import { saveCardPurchases, type Bank } from '../lib/bridge';
 import { invoiceDate, type CreditCard } from '../lib/credit';
 import { localDateKey } from '../lib/finance';
-import { newCardPurchaseRows, pickSource, quickBankEntry, quickCardData, type QuickInput, type QuickSource } from '../lib/quickEntry';
+import { createPendingSaver, newCardPurchaseRows, pickSource, quickBankEntry, quickCardData, quickDraftAmount, type QuickInput, type QuickSource } from '../lib/quickEntry';
 
 const SOURCE_KEY = 'fincore-pessoal.quick.source';
 const UNIT_KEY = 'fincore-pessoal.quick.unit';
@@ -15,14 +15,16 @@ const write = (key: string, value: string) => { try { localStorage.setItem(key, 
 const ddmm = (date: string) => date.slice(5).split('-').reverse().join('/');
 const monthName = (date: string) => new Date(`${date.slice(0, 7)}-01T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-export type QuickDraft = { source: QuickSource; input: QuickInput };
+/** `amount` is undefined when the value field was left empty. */
+export type QuickDraft = { source: QuickSource; input: QuickInput; amount: number | undefined };
 
-export default function QuickEntry({ banks, cards, categories, units, saveBank, onCardSaved, onMoreDetails, onOpenApp }: {
+export default function QuickEntry({ banks, cards, categories, units, createBankEntries, onCardSaved, onMoreDetails, onOpenApp }: {
  banks: Bank[];
  cards: CreditCard[];
  categories: { id: string; name: string; kind?: string; unit?: string }[];
  units: { name: string }[];
- saveBank: (entry: ReturnType<typeof quickBankEntry>) => Promise<void>;
+ /** Create-only: inserts these rows (ids already set); never edits an existing entry. */
+ createBankEntries: (rows: (ReturnType<typeof quickBankEntry> & { id: string })[]) => Promise<void>;
  onCardSaved: () => Promise<void>;
  onMoreDetails: (draft: QuickDraft) => void;
  onOpenApp: () => void;
@@ -33,7 +35,8 @@ export default function QuickEntry({ banks, cards, categories, units, saveBank, 
  const [amount, setAmount] = useState(''), [category, setCategory] = useState(''), [description, setDescription] = useState('');
  const [date, setDate] = useState(today), [installments, setInstallments] = useState(1), [paid, setPaid] = useState(true);
  const [saving, setSaving] = useState(false), [error, setError] = useState(''), [done, setDone] = useState('');
- const pendingCard = useRef<{ key: string; rows: any[] } | null>(null);
+ // Mesmo id em nova tentativa após falha: o upsert não duplica o lançamento.
+ const [saver] = useState(createPendingSaver);
 
  // Fontes podem ter mudado desde a primeira renderização (dados chegando).
  const current = source && (source.type === 'bank' ? banks : cards).some(x => x.id === source.id) ? source : pickSource(read(SOURCE_KEY), banks, cards);
@@ -52,13 +55,10 @@ export default function QuickEntry({ banks, cards, categories, units, saveBank, 
   try {
    if (card) {
     const data = quickCardData(input);
-    const key = JSON.stringify({ data, card: card.id });
-    if (pendingCard.current?.key !== key) pendingCard.current = { key, rows: newCardPurchaseRows(data, card) };
-    await saveCardPurchases(pendingCard.current.rows);
-    pendingCard.current = null;
-    await onCardSaved();
+    await saver.run(JSON.stringify({ data, card: card.id }), () => newCardPurchaseRows(data, card), saveCardPurchases, onCardSaved);
    } else {
-    await saveBank(quickBankEntry(input, current.id));
+    const entry = quickBankEntry(input, current.id);
+    await saver.run(JSON.stringify({ entry }), () => [{ ...entry, id: crypto.randomUUID() }], createBankEntries, async () => {});
    }
    write(SOURCE_KEY, `${current.type}:${current.id}`);
    write(UNIT_KEY, unit);
@@ -155,7 +155,7 @@ export default function QuickEntry({ banks, cards, categories, units, saveBank, 
      <button type="submit" disabled={!ready || saving} className="w-full rounded-2xl bg-[#191918] py-4 text-base font-bold text-white shadow-[0_8px_20px_-10px_rgba(24,24,27,0.8)] disabled:opacity-40">
       {saving ? 'Lançando…' : 'Lançar'}
      </button>
-     <button type="button" onClick={() => onMoreDetails({ source: current, input })} className="mx-auto flex items-center gap-1.5 text-sm font-semibold text-zinc-600">
+     <button type="button" onClick={() => onMoreDetails({ source: current, input, amount: quickDraftAmount(amount) })} className="mx-auto flex items-center gap-1.5 text-sm font-semibold text-zinc-600">
       <SlidersHorizontal size={14} aria-hidden /> Mais detalhes
      </button>
     </>)}

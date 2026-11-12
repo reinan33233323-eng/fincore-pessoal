@@ -3251,24 +3251,33 @@ function App() {
     [entryDraft, setEntryDraft] = useState<Partial<Entry> | null>(null),
     [cardDraft, setCardDraft] = useState<{ cardId: string; data: any } | null>(null),
     quickOpened = useRef(false);
-  // No celular, o app abre direto no Lançamento rápido (uma vez por sessão).
+  // No celular, o app abre direto no Lançamento rápido — só na carga inicial.
+  // Girar o aparelho ou estreitar a janela depois não troca de tela, para não
+  // esconder um formulário aberto.
   useEffect(() => {
-    if (!currentUser || !dataReady || !isMobile || quickOpened.current) return;
+    if (!currentUser || !dataReady || quickOpened.current) return;
     quickOpened.current = true;
+    if (window.innerWidth < 768) setScreen("rapido");
+  }, [currentUser, dataReady]);
+  const openQuickEntry = () => {
+    setModal(null);
+    setEditing(null);
+    setEntryDraft(null);
+    setCardDraft(null);
     setScreen("rapido");
-  }, [currentUser, dataReady, isMobile]);
-  const openQuickDetails = ({ source, input }: QuickDraft) => {
+  };
+  const openQuickDetails = ({ source, input, amount }: QuickDraft) => {
     if (source.type === "card") {
       const card = cards.find((c) => c.id === source.id);
       if (!card) return;
-      setCardDraft({ cardId: card.id, data: quickCardData(input) });
+      setCardDraft({ cardId: card.id, data: { ...quickCardData(input), amount } });
       setCardFocus({ cardId: card.id, month: invoiceDate(input.date, card, 0).slice(0, 7) });
       setScreen("cartoes");
       return;
     }
     setEditing(null);
     setEditScope("one");
-    setEntryDraft(quickBankEntry(input, source.id));
+    setEntryDraft({ ...quickBankEntry(input, source.id), amount });
     setScreen("lancamentos");
     setModal("despesa");
   };
@@ -4012,7 +4021,11 @@ function App() {
         cards={cards}
         categories={categories}
         units={allowedUnits}
-        saveBank={(entry) => save(entry, "one")}
+        createBankEntries={async (rows) => {
+          await saveRemoteEntries(rows);
+          setEntries((old) => [...rows, ...old.filter((e) => !rows.some((r) => r.id === e.id))]);
+          void refreshContacts();
+        }}
         onCardSaved={refreshPersonal}
         onMoreDetails={openQuickDetails}
         onOpenApp={() => setScreen("dashboard")}
@@ -4024,7 +4037,7 @@ function App() {
         <button
           type="button"
           aria-label="Lançamento rápido"
-          onClick={() => setScreen("rapido")}
+          onClick={openQuickEntry}
           className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#191918] text-white shadow-[0_12px_28px_-10px_rgba(24,24,27,0.9)]"
         >
           <Plus size={26} aria-hidden />

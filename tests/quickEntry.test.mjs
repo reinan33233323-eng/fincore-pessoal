@@ -49,3 +49,29 @@ test('pickSource falls back to Itaú, then first bank, then first card, then nul
  assert.deepEqual(pickSource(null,[],[{id:'c1'}]),{type:'card',id:'c1'});
  assert.equal(pickSource(null,[],[]),null);
 });
+
+import { createPendingSaver, quickDraftAmount } from '../src/lib/quickEntry.ts';
+test('retry after a failed refresh re-saves the same rows instead of new ones',async()=>{
+ const saver=createPendingSaver();let built=0;const saved=[];let failRefresh=true;
+ const build=()=>[{id:`row-${++built}`}];
+ const persist=async rows=>{saved.push(rows.map(r=>r.id).join());};
+ const after=async()=>{if(failRefresh)throw new Error('offline');};
+ await assert.rejects(saver.run('k',build,persist,after),/offline/);
+ failRefresh=false;
+ await saver.run('k',build,persist,after);
+ assert.deepEqual(saved,['row-1','row-1']);
+ await saver.run('k',build,persist,after);
+ assert.deepEqual(saved,['row-1','row-1','row-2']);
+});
+test('a changed form builds new rows even if the last save failed',async()=>{
+ const saver=createPendingSaver();let built=0;const saved=[];
+ const build=()=>[{id:`row-${++built}`}];
+ await assert.rejects(saver.run('a',build,async()=>{throw new Error('x');},async()=>{}));
+ await saver.run('b',build,async rows=>{saved.push(rows[0].id);},async()=>{});
+ assert.deepEqual(saved,['row-2']);
+});
+test('more details keeps an empty amount empty instead of zero',()=>{
+ assert.equal(quickDraftAmount(''),undefined);
+ assert.equal(quickDraftAmount('0'),0);
+ assert.equal(quickDraftAmount('45.9'),45.9);
+});
