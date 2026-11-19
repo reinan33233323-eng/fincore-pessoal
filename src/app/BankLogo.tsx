@@ -10,6 +10,7 @@ const brands: [RegExp, Brand][] = [
   [/banco do brasil|^bb\b/i, { bg: "#FCF900", fg: "#0038A8", mark: "BB", size: "0.7em", weight: 800 }],
   [/caixa|cef\b/i, { bg: "#005CA9", fg: "#F39200", mark: "X", size: "1em", weight: 800 }],
   [/inter\b|banco inter/i, { bg: "#FF7A00", fg: "#fff", mark: "inter", size: "0.55em", weight: 800 }],
+  [/\bcora\b/i, { bg: "#FE3E6D", fg: "#fff", mark: "cora", size: "0.65em", weight: 700 }],
   [/c6/i, { bg: "#1C1C1C", fg: "#fff", mark: "C6", size: "0.7em", weight: 800 }],
   [/btg/i, { bg: "#0B2A4A", fg: "#fff", mark: "btg", size: "0.6em", weight: 800 }],
   [/picpay/i, { bg: "#11C76F", fg: "#fff", mark: "pic", size: "0.6em", weight: 800 }],
@@ -26,7 +27,7 @@ const plain = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g
 export const bankBrand = (name = "") => brands.find(([pattern]) => pattern.test(plain(name)))?.[1];
 
 // Quick picks shown in the account and card forms.
-export const BANK_CHOICES = ["Nubank", "Itaú", "Bradesco", "Santander", "Banco do Brasil", "Caixa", "Inter", "C6", "BTG", "PicPay", "Mercado Pago", "XP"];
+export const BANK_CHOICES = ["Nubank", "Itaú", "Bradesco", "Santander", "Banco do Brasil", "Caixa", "Inter", "Cora", "C6", "BTG", "PicPay", "Mercado Pago", "XP"];
 /** Puts the chosen bank at the start of the name, replacing a previously chosen one. */
 export const withBank = (name: string, bank: string) => {
   const current = name.trim();

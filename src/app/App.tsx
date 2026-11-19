@@ -650,24 +650,28 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-function NewCategory({
+export function NewCategory({
   close,
   save,
   category,
+  initialUnit,
+  initialKind,
   allowedUnits,
   allowIncome = true,
 }: {
   close: () => void;
   save: (c: Category) => Promise<void>;
   category?: Category | null;
+  initialUnit?: Unit;
+  initialKind?: Kind;
   allowedUnits: typeof units;
   /** Categorias de receita são exclusivas do Master. */
   allowIncome?: boolean;
 }) {
   const [name, setName] = useState(category?.name ?? ""),
-    [kind, setKind] = useState<Kind>(category?.kind ?? "despesa"),
+    [kind, setKind] = useState<Kind>(category?.kind ?? initialKind ?? "despesa"),
     [unit, setUnit] = useState<Unit>(
-      category?.unit ?? allowedUnits[0]?.name ?? "Consultoria",
+      category?.unit ?? initialUnit ?? allowedUnits[0]?.name ?? "Consultoria",
     ),
     [icon, setIcon] = useState(category?.icon ?? "🏷️"),
     [color, setColor] = useState(category?.color ?? "#3b82f6"),
@@ -1226,6 +1230,7 @@ export function EntryForm({
   cardMode,
   onNewCategory,
   onNewCenter,
+  onCreateCategory,
   categories,
   contacts,
   contactsTableReady,
@@ -1244,8 +1249,9 @@ export function EntryForm({
   /** Shown only when editing: deletes this entry (and offers the whole series). */
   onDelete?: () => void;
   cardMode?: PersonalCreditCard;
-  onNewCategory?: () => void;
+  onNewCategory?: (unit:Unit,kind:Kind) => void;
   onNewCenter?: () => void;
+  onCreateCategory?: (name:string,unit:Unit,kind:Kind)=>Promise<Category>;
   kind: Kind;
   categories: Category[];
   contacts: Counterparty[];
@@ -1316,6 +1322,10 @@ export function EntryForm({
     [removedAttachments, setRemovedAttachments] = useState<string[]>([]),
     [saving, setSaving] = useState(false),
     [saveError, setSaveError] = useState("");
+  const [newCategoryName,setNewCategoryName]=useState("");
+  const [creatingCategory,setCreatingCategory]=useState(false);
+  const [categoryCreator,setCategoryCreator]=useState(false);
+  useEffect(()=>{setCategoryCreator(false);setNewCategoryName("");},[unit,kind]);
   const attachmentName = (path: string) => {
     const base = path.split("/").pop() || path;
     return base.replace(/^\d+-/, "");
@@ -1623,7 +1633,7 @@ export function EntryForm({
               </select>
             </label>
           </div>
-          {cardMode && <div className="flex flex-wrap gap-3"><button type="button" onClick={onNewCenter} className="text-xs font-bold text-brand-700">+ Novo centro de custo</button><button type="button" onClick={onNewCategory} className="text-xs font-bold text-brand-700">+ Nova categoria / plano de contas</button></div>}
+          {cardMode && <div className="flex flex-wrap gap-3"><button type="button" onClick={onNewCenter} className="text-xs font-bold text-brand-700">+ Novo centro de custo</button><button type="button" onClick={()=>onNewCategory?.(unit,kind)} className="text-xs font-bold text-brand-700">+ Nova categoria / plano de contas</button></div>}
           <label className="block text-xs font-bold">
             {cardMode ? "Categoria / plano de contas" : "Categoria"}
             {kind === "despesa" ? <CategoryPicker value={category} onChange={setCategory} options={category && !available.some(c=>c.name===category) ? [...available,{id:'existing-category',name:category}] : available} /> : (
@@ -1646,10 +1656,13 @@ export function EntryForm({
             )}
             {!available.length && (
               <span className="mt-1 block text-red-600">
-                Cadastre uma categoria para este centro no Plano de contas.
+                Este centro ainda não tem categorias para este tipo de lançamento. Cadastre uma categoria para continuar.
               </span>
             )}
           </label>
+          {onCreateCategory&&<div className="rounded-xl bg-zinc-50 p-3 text-xs">
+            {categoryCreator ? <div className="space-y-2"><label className="block font-medium">Nova categoria de {kind==='receita'?'receita':'despesa'} · {unit}<input aria-label="Nome da nova categoria" maxLength={80} value={newCategoryName} onChange={e=>setNewCategoryName(e.target.value)} className="mt-1 block w-full rounded-xl border bg-white p-3 text-sm"/></label><div className="flex gap-3"><button type="button" disabled={creatingCategory||!newCategoryName.trim()} className="rounded-full bg-black px-4 py-2 font-medium text-white disabled:opacity-50" onClick={async()=>{setCreatingCategory(true);setSaveError('');try{const created=await onCreateCategory(newCategoryName.trim(),unit,kind);setCategory(created.name);setCategoryCreator(false);setNewCategoryName('');}catch(error){setSaveError(error instanceof Error?error.message:'Não foi possível criar a categoria.');}finally{setCreatingCategory(false);}}}>{creatingCategory?'Criando…':'Criar e selecionar categoria'}</button><button type="button" disabled={creatingCategory} onClick={()=>setCategoryCreator(false)}>Cancelar</button></div></div> : <button type="button" className="font-semibold text-violet-800" onClick={()=>setCategoryCreator(true)}>+ Criar categoria neste centro</button>}
+          </div>}
           <label className="block text-xs font-bold">
             Descrição
             <input
@@ -3225,7 +3238,7 @@ function App() {
     [currentUser, setCurrentUser] = useState<User | null>(null),
     [authReady, setAuthReady] = useState(false),
     [modal, setModal] = useState<Kind | null>(null),
-    [categoryModal, setCategoryModal] = useState(false),
+    [categoryModal, setCategoryModal] = useState<false|{unit?:Unit;kind?:Kind}>(false),
     [centerModal, setCenterModal] = useState(false),
     [editingCenter, setEditingCenter] = useState<CostCenter | null>(null),
     [deletingCenter, setDeletingCenter] = useState<CostCenter | null>(null),
@@ -3599,6 +3612,15 @@ function App() {
       ? { ...user, units: [...new Set([...user.units, center.name])] }
       : user);
 
+  };
+  const createEntryCategory = async (name:string,unit:Unit,kind:Kind) => {
+    if(!canCreatePlans)throw new Error('Seu acesso não permite criar categorias.');
+    const existing=categories.find(c=>c.unit===unit&&c.kind===kind&&c.name.toLocaleLowerCase('pt-BR')===name.toLocaleLowerCase('pt-BR'));
+    if(existing)return existing;
+    const category:Category={id:id(),name,unit,kind,icon:'🏷️',color:kind==='receita'?'#65bd81':'#e38b94'};
+    await saveRemoteCategory(category);
+    setCategories(old=>[...old,category]);
+    return category;
   };
   const updateCenter = async (name: string, initials: string, color: string) => {
     if (currentUser?.role !== "master") throw new Error("Apenas o Master pode editar planos de contas.");
@@ -4033,6 +4055,7 @@ function App() {
       { id: "relatorios", text: "Relatórios", Icon: BarChart3 },
     ];
   const goTo = (id: string) => {
+    if(id === "cartoes")setCardFocus(null);
     setScreen(id);
     if (id === "lancamentos") {
       setFilter("Todos");
@@ -4608,7 +4631,7 @@ function App() {
           ) : screen === "cartoes" ? (
             <CreditCards categories={categories} key={`${cardFocus?.cardId||''}:${cardFocus?.month||''}`} cards={cards} setCards={setCards} banks={banks} entries={[...entries, ...cardPaymentEntries(cardPayments, cards)]} payments={cardPayments} onRefresh={refreshPersonal} focus={cardFocus} onPlans={()=>setScreen("categorias")} onEntries={(invoiceMonth)=>{setMonth(new Date(`${invoiceMonth}-01T12:00:00`));setSearch("");setFilter("Todos");setEntryFilter("todos");setPeriodMode("mes");setCounterpartyFilter("todos");setOverdueKind("todos");setScreen("lancamentos");}}
               startPurchase={Boolean(cardDraft)}
-              renderForm={(purchase,savePurchase,close,card,onDelete,scope)=><EntryForm key={`${purchase?.id||'new'}:${scope||'one'}`} scope={scope} onDelete={onDelete} kind="despesa" cardMode={card} draft={!purchase && cardDraft?.cardId===card.id ? cardDraft.data : null} onNewCategory={()=>setCategoryModal(true)} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={()=>{setCardDraft(null);close();}} save={async(...args)=>{await savePurchase(...args);setCardDraft(null);}} />}
+              renderForm={(purchase,savePurchase,close,card,onDelete,scope)=><EntryForm key={`${purchase?.id||'new'}:${scope||'one'}`} scope={scope} onCreateCategory={canCreatePlans?createEntryCategory:undefined} onDelete={onDelete} kind="despesa" cardMode={card} draft={!purchase && cardDraft?.cardId===card.id ? cardDraft.data : null} onNewCategory={(unit,kind)=>setCategoryModal({unit,kind})} onNewCenter={()=>setCenterModal(true)} categories={categories} contacts={contacts} contactsTableReady={contactsTableReady} allowedUnits={allowedUnits} banks={banks} allowIncome={false} editing={purchase} close={()=>{setCardDraft(null);close();}} save={async(...args)=>{await savePurchase(...args);setCardDraft(null);}} />}
             />
           ) : screen === "contatos" ? (
             <ContactsScreen
@@ -4674,7 +4697,7 @@ function App() {
                     </button>
                   )}
                   <button
-                    onClick={() => setCategoryModal(true)}
+                    onClick={() => setCategoryModal({})}
                     className="group flex items-center gap-2 rounded-full bg-[#191918] py-1.5 pl-1.5 pr-4 text-xs font-medium text-white shadow-[0_10px_24px_-12px_rgba(24,24,27,0.9)] hover:bg-black"
                   >
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 transition-transform duration-300 group-hover:rotate-90"><Plus className="h-4 w-4" /></span>
@@ -4759,7 +4782,7 @@ function App() {
                               })}
                               <button
                                 type="button"
-                                onClick={() => setCategoryModal(true)}
+                                onClick={() => setCategoryModal({unit:u.name,kind:k})}
                                 className="flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-zinc-300 p-2.5 text-xs text-zinc-500 hover:border-[#191918] hover:bg-white hover:text-[#191918]"
                               >
                                 <Plus className="h-3.5 w-3.5" />Nova
@@ -4809,6 +4832,7 @@ function App() {
       {modal && (
         <EntryForm
           kind={modal}
+          onCreateCategory={canCreatePlans?createEntryCategory:undefined}
           categories={categories}
           contacts={contacts}
           contactsTableReady={contactsTableReady}
@@ -4865,6 +4889,8 @@ function App() {
       )}{" "}
       {categoryModal && (
         <NewCategory
+          initialUnit={categoryModal.unit}
+          initialKind={categoryModal.kind}
           close={() => setCategoryModal(false)}
           allowedUnits={allowedUnits}
           allowIncome={canCreatePlans}

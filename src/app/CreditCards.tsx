@@ -1,5 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { initialCardId } from '../lib/cardSelection';
 import CreditInvoiceView from './CreditInvoiceView';
 import RecurrenceScopeDialog from './RecurrenceScopeDialog';
 import { seriesTargets, type SeriesScope } from '../lib/seriesScope';
@@ -20,7 +21,7 @@ type Props={/** Abre o formulário de nova compra ao montar (Lançamento rápido
 export default function CreditCards({startPurchase=false,cards,setCards,banks,entries,onRefresh,onPlans,onEntries,renderForm,focus,payments=[],categories:categoryDefinitions=[]}:Props) {
  const today=localDateKey(new Date());
  const pendingSave=useRef<{key:string;rows:any[]}|null>(null);
- const [cardId,setCardId]=useState(focus?.cardId||cards[0]?.id||''),[month,setMonth]=useState(()=>focus?.month||(cards.find(c=>c.id===(focus?.cardId||cards[0]?.id))?invoiceDate(today,cards.find(c=>c.id===(focus?.cardId||cards[0]?.id))!).slice(0,7):localMonthKey(new Date())));
+ const [cardId,setCardId]=useState(()=>initialCardId(cards,focus?.cardId)),[month,setMonth]=useState(()=>focus?.month||(cards.find(c=>c.id===initialCardId(cards,focus?.cardId))?invoiceDate(today,cards.find(c=>c.id===initialCardId(cards,focus?.cardId))!).slice(0,7):localMonthKey(new Date())));
  const [followCurrentCycle,setFollowCurrentCycle]=useState(!focus?.month);
  const [name,setName]=useState(''),[closing,setClosing]=useState('25'),[due,setDue]=useState('5'),[editing,setEditing]=useState('');
  const [includeInBalance,setIncludeInBalance]=useState(true);
@@ -113,7 +114,7 @@ export default function CreditCards({startPurchase=false,cards,setCards,banks,en
  const editCard=()=>{if(card){setEditing(card.id);setName(card.name);setClosing(String(card.closing_day));setDue(String(card.due_day));setIncludeInBalance(card.include_in_balance!==false);setCardFormOpen(true);}};
  return <div className="space-y-4">
  {error&&<p role="alert" className="mx-auto max-w-[920px] rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}{message&&<p role="status" className="mx-auto max-w-[920px] rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
- {card&&cycle?<CreditInvoiceView cards={cards} cardId={cardId} month={month} cycle={cycle} today={today}
+ {card&&cycle?<CreditInvoiceView cards={[...cards].sort((a,b)=>Number(b.id===initialCardId(cards))-Number(a.id===initialCardId(cards)))} cardId={cardId} month={month} cycle={cycle} today={today}
    controlOnly={card.include_in_balance===false} total={selectedSummary.total} paid={selectedSummary.paid} pending={total} nextTotal={nextSummary.total} invoice={invoice} rows={list} categories={categoryDefinitions} banks={banks}
    search={search} setSearch={setSearch} category={category} setCategory={setCategory} center={center} setCenter={setCenter} status={statusFilter} setStatus={setStatusFilter}
    selectCard={value=>{setCardId(value);const selected=cards.find(c=>c.id===value);if(selected)selectMonth(invoiceDate(today,selected).slice(0,7),true);}}

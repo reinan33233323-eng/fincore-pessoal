@@ -149,6 +149,7 @@ export default function QuickEntry({ banks, cards, categories, units, createBank
       </select>
      </label>
 
+     {!available.length&&<div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Este centro ainda não tem categorias de despesa. <button type="button" className="font-semibold underline" onClick={()=>onMoreDetails({source:current,input,amount:quickDraftAmount(amount)})}>Criar categoria e continuar</button></div>}
      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
      {done && <p role="status" className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800"><Check size={16} aria-hidden /> {done}</p>}
 
